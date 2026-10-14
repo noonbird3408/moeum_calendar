@@ -17,7 +17,7 @@ export function buildIcs(events: CalendarEvent[], calNameOf: (id: string) => str
     const timed = !!e.start_time && !!e.end_time;
     const startDate = e.start_date;
     // 종일 일정의 DTEND 는 마지막 날 다음 날
-    const endDate = e.repeat_weekdays ? e.start_date : e.end_date;
+    const endDate = e.repeat_weekdays || e.event_dates?.length ? e.start_date : e.end_date;
     if (timed) {
       lines.push(`DTSTART;TZID=Asia/Seoul:${ymdCompact(startDate)}T${hmsCompact(e.start_time!)}`);
       lines.push(`DTEND;TZID=Asia/Seoul:${ymdCompact(endDate)}T${hmsCompact(e.end_time!).replace(/^240000$/, '235959')}`);
@@ -27,6 +27,17 @@ export function buildIcs(events: CalendarEvent[], calNameOf: (id: string) => str
     }
     if (e.repeat_weekdays && e.repeat_until) {
       lines.push(`RRULE:FREQ=WEEKLY;BYDAY=${e.repeat_weekdays.map((d) => DAY[d]).join(',')};UNTIL=${ymdCompact(e.repeat_until)}`);
+    }
+    if (e.event_dates?.length) {
+      // 떨어진 날짜 일정: 첫 날 말고 나머지 날짜를 RDATE 로
+      const rest = [...e.event_dates].sort().filter((d) => d !== e.start_date);
+      if (rest.length) {
+        lines.push(
+          timed
+            ? `RDATE;TZID=Asia/Seoul:${rest.map((d) => `${ymdCompact(d)}T${hmsCompact(e.start_time!)}`).join(',')}`
+            : `RDATE;VALUE=DATE:${rest.map(ymdCompact).join(',')}`,
+        );
+      }
     }
     lines.push(`SUMMARY:${esc(`${e.is_group ? '[전체] ' : ''}${e.title}`)}`);
     const desc = [e.memo, e.link_url, `캘린더: ${calNameOf(e.calendar_id)}`].filter(Boolean).join('\n');

@@ -13,6 +13,7 @@ export type Slot = {
   repeat_weekdays?: number[] | null;
   repeat_until?: string | null;
   excluded_dates?: string[];
+  event_dates?: string[] | null; // 떨어진 날짜 전체 일정이면 그 날짜만 본다
 };
 export type Conflict = { userId: string; title: string; date: string; time: string };
 
@@ -40,9 +41,22 @@ export async function findConflicts(calendarId: string, userIds: string[], cand:
     const from = e.start_date > cand.start_date ? e.start_date : cand.start_date;
     const to = e.end_date < cand.end_date ? e.end_date : cand.end_date;
     if (from > to) continue;
-    const weekly = !!cand.repeat_weekdays?.length && !!cand.repeat_until;
+    const weekly = (!!cand.repeat_weekdays?.length && !!cand.repeat_until) || !!cand.event_dates?.length;
     for (let d = from, n = diffDays(from, to); n >= 0; n--, d = addDays(d, 1)) {
-      if (weekly && !isOccurrence({ start_date: cand.start_date, repeat_weekdays: cand.repeat_weekdays!, repeat_until: cand.repeat_until!, excluded_dates: cand.excluded_dates }, d)) continue;
+      if (
+        weekly &&
+        !isOccurrence(
+          {
+            start_date: cand.start_date,
+            repeat_weekdays: cand.repeat_weekdays ?? null,
+            repeat_until: cand.repeat_until ?? null,
+            excluded_dates: cand.excluded_dates,
+            event_dates: cand.event_dates,
+          },
+          d,
+        )
+      )
+        continue;
       // 반복 회차는 하루짜리라 그날 시작~종료 시간 그대로
       const [cs, ce] = weekly ? dayWindow(d, { ...cand, start_date: d, end_date: d }) : dayWindow(d, cand);
       const [es, ee] = dayWindow(d, e);

@@ -44,6 +44,7 @@ export type CalendarEvent = {
   image_paths?: string[]; // 전체 일정 사진 (event-images 버킷 경로)
   max_participants?: number | null; // 참여 정원 (전체 일정)
   sync_id?: string | null; // 메인에서 쓴 개인 일정: 캘린더마다 복사된 같은 일정끼리 같은 값
+  event_dates?: string[] | null; // 떨어진 날짜로 만든 전체 일정: 진행하는 날짜 목록 (start_date~end_date 는 처음~마지막 날)
   created_at: string;
   updated_at: string;
   /** 화면에 펼쳐 놓은 회차의 날짜 (반복 일정을 날짜마다 펼칠 때만 채움) */
@@ -64,6 +65,7 @@ export type EventInput = {
   repeat_weekdays: number[] | null;
   repeat_until: string | null;
   excluded_dates?: string[];
+  event_dates?: string[] | null;
   link_url: string | null;
   image_paths?: string[];
   max_participants?: number | null;

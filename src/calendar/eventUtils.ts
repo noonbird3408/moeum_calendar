@@ -42,6 +42,12 @@ export const nicknameOf = (profiles: Map<string, Profile>, id: string) => profil
 
 /** 목록·상세용 일시: 반복 일정은 '매주 월·수 19:00~21:00 · 12/01 ~ 01/31' */
 export function scheduleText(e: CalendarEvent) {
+  if (e.event_dates?.length) {
+    // 떨어진 날짜: '10/3, 10/17, 10/31 19:00~23:00' (많으면 '외 N일')
+    const list = [...e.event_dates].sort();
+    const shown = list.slice(0, 4).map(fmtMD).join(', ') + (list.length > 4 ? ` 외 ${list.length - 4}일` : '');
+    return `${shown} ${timeRange(e)}`;
+  }
   if (e.repeat_weekdays && e.repeat_until) {
     const time = e.start_time ? ` ${fmtTime(e.start_time)}~${fmtTime(e.end_time)}` : ' 하루종일';
     const first = e.series_start_date ?? e.start_date;

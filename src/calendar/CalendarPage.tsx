@@ -4,7 +4,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { addMonths, fmtMonthTitle, isSameMonth, monthGrid, parseYmd, startOfMonth, todayYmd } from '@/lib/dates';
 import { useIsMobile } from '@/lib/hooks';
 import { setPrefs, usePrefs } from '@/lib/prefs';
-import { expandEvents, nextOccurrence } from '@/lib/recurrence';
+import { expandEvents, hasOccurrences, nextOccurrence } from '@/lib/recurrence';
 import { Link, useRouter } from '@/lib/router';
 import { computeAvailability, type Chip } from '@/availability/computeAvailability';
 import { AvailabilityPanel, HighlightToggles } from '@/availability/AvailabilityChips';
@@ -132,7 +132,7 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
         if (!data) return toast('일정을 찾을 수 없어요. 삭제되었을 수 있어요.', 'error');
         const today0 = todayYmd();
         // 반복 일정은 다가오는 회차가 있는 달로
-        const shown = data.repeat_weekdays ? (nextOccurrence(data, today0) ?? data.start_date) : data.start_date < today0 && data.end_date >= today0 ? today0 : data.start_date;
+        const shown = hasOccurrences(data) ? (nextOccurrence(data, today0) ?? data.start_date) : data.start_date < today0 && data.end_date >= today0 ? today0 : data.start_date;
         setMonth(startOfMonth(parseYmd(shown)));
         setDetailSnap(data);
         setDetailId(data.id);

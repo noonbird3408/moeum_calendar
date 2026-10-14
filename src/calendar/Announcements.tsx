@@ -45,13 +45,15 @@ export function useAnnouncements(calendarId: string) {
   return rows;
 }
 
-type GroupLite = Pick<CalendarEvent, 'id' | 'title' | 'start_date' | 'end_date' | 'start_time' | 'end_time'>;
+type GroupLite = Pick<CalendarEvent, 'id' | 'title' | 'start_date' | 'end_date' | 'start_time' | 'end_time' | 'event_dates'>;
 
 const fmtWhen = (iso: string) =>
   new Date(iso).toLocaleString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const eventWhen = (e: GroupLite) =>
-  `${fmtMD(e.start_date)} (${WEEKDAYS[weekday(e.start_date)]})${e.end_date !== e.start_date ? ` ~ ${fmtMD(e.end_date)}` : ''}${e.start_time ? ` ${e.start_time.slice(0, 5)}` : ''}`;
+  e.event_dates && e.event_dates.length > 1
+    ? `${fmtMD(e.start_date)} (${WEEKDAYS[weekday(e.start_date)]}) 외 ${e.event_dates.length - 1}일${e.start_time ? ` ${e.start_time.slice(0, 5)}` : ''}`
+    : `${fmtMD(e.start_date)} (${WEEKDAYS[weekday(e.start_date)]})${e.end_date !== e.start_date ? ` ~ ${fmtMD(e.end_date)}` : ''}${e.start_time ? ` ${e.start_time.slice(0, 5)}` : ''}`;
 
 /** 이 캘린더의 전체(단체) 일정 목록 (공지 태그용) */
 function useGroupEvents(calendarId: string, enabled: boolean) {
@@ -61,7 +63,7 @@ function useGroupEvents(calendarId: string, enabled: boolean) {
     let alive = true;
     supabase
       .from('events')
-      .select('id, title, start_date, end_date, start_time, end_time')
+      .select('id, title, start_date, end_date, start_time, end_time, event_dates')
       .eq('calendar_id', calendarId)
       .eq('is_group', true)
       .order('start_date', { ascending: false })
@@ -189,7 +191,7 @@ export function NoticeView({
     let alive = true;
     supabase
       .from('events')
-      .select('id, title, start_date, end_date, start_time, end_time')
+      .select('id, title, start_date, end_date, start_time, end_time, event_dates')
       .eq('id', item.event_id)
       .maybeSingle()
       .then(({ data }: { data: GroupLite | null }) => alive && setTagged(data));

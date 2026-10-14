@@ -5,7 +5,7 @@ import { diffDays, fmtMD, todayYmd, WEEKDAYS, weekday } from '@/lib/dates';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from '@/lib/router';
 import { textOn } from '@/lib/colors';
-import { nextOccurrence } from '@/lib/recurrence';
+import { hasOccurrences, nextOccurrence } from '@/lib/recurrence';
 
 export type CalLite = { id: string; name: string; group_color: string };
 
@@ -51,7 +51,7 @@ export function UpcomingGroups({
       const today = todayYmd();
       const list = ((data ?? []) as CalendarEvent[])
         .map((e) => {
-          if (!e.repeat_weekdays || !e.repeat_until) return e;
+          if (!hasOccurrences(e)) return e;
           const next = nextOccurrence(e, today);
           return next ? { ...e, occ: next, series_start_date: e.start_date, start_date: next, end_date: next } : null;
         })

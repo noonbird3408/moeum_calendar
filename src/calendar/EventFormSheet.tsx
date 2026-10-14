@@ -46,6 +46,7 @@ const snap = (t: string | null, fallback: string) => {
 /** 수정할 일정의 날짜를 선택 집합으로: 반복 일정은 기간 양 끝, 아니면 기간의 모든 날 */
 function initialDates(e: CalendarEvent | undefined, picked: string | undefined): Set<string> {
   if (!e) return picked ? new Set([picked]) : new Set();
+  if (e.event_dates?.length) return new Set(e.event_dates); // 떨어진 날짜 전체 일정
   if (e.repeat_weekdays && e.repeat_until) {
     // 기간을 따로 안 정한 반복(기본 1년)은 시작일만 보여 준다
     return diffDays(e.start_date, e.repeat_until) === REPEAT_DEFAULT_DAYS ? new Set([e.start_date]) : new Set([e.start_date, e.repeat_until]);
@@ -55,7 +56,7 @@ function initialDates(e: CalendarEvent | undefined, picked: string | undefined):
   return out;
 }
 
-type Slot = { start: string; end: string };
+type Slot = { start: string; end: string; dates?: string[] };
 type TimeRange = { start: string; end: string };
 type NewImage = { file: File; url: string };
 
@@ -121,8 +122,10 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
   //  · 요일 반복: 고른 날짜의 처음~끝 (하루만 골랐거나 없으면 그날부터 1년) 동안 매주
   //  · 하루종일: 이어진 날짜마다 한 일정 (10/15~10/17 → 하나)
   //  · 시간 일정: 고른 날마다 한 일정 (매일 19:00~21:00)
-  //  · 전체 일정: 이어진 날짜마다 한 일정 (떨어진 날짜를 고르면 일정이 여러 개 생긴다)
+  //  · 전체 일정: 하나의 일정. 떨어진 날짜를 고르면 처음~마지막 날 + 진행 날짜 목록(event_dates)으로 저장
+  const groupMulti = isGroup && !weekly && runs.length > 1;
   const slots: Slot[] = useMemo(() => {
+    if (groupMulti) return [{ start: sorted[0], end: sorted[sorted.length - 1], dates: sorted }];
     if (weekly) {
       const s = sorted[0] ?? baseDate;
       const last = sorted[sorted.length - 1];
@@ -130,7 +133,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
     }
     if (isGroup || allDay) return runs.map(([s, e]) => ({ start: s, end: e }));
     return sorted.map((d) => ({ start: d, end: d }));
-  }, [weekly, sorted, baseDate, isGroup, allDay, runs]);
+  }, [groupMulti, weekly, sorted, baseDate, isGroup, allDay, runs]);
 
   // 수정 중인 전체 일정이면 지금 지정된 참여 멤버와 사진을 불러온다
   useEffect(() => {
@@ -158,9 +161,10 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
     if (isGroup && !groupOkNow) e.push('전체 일정은 선택한 캘린더의 관리자만 만들 수 있어요.');
     if (!weekly && !dates.size) e.push('날짜를 골라 주세요.');
     if (weekly && slots[0] && diffDays(slots[0].start, slots[0].end) > MAX_REPEAT_SPAN) e.push(`반복 기간은 최대 ${MAX_REPEAT_SPAN + 1}일이에요.`);
+    if (groupMulti && slots[0] && diffDays(slots[0].start, slots[0].end) > MAX_REPEAT_SPAN) e.push(`첫 날부터 마지막 날까지 최대 ${MAX_REPEAT_SPAN + 1}일이에요.`);
     if (slots.length * Math.max(activeTimes.length, 1) > MAX_DAYS) e.push(`한 번에 ${MAX_DAYS}개까지 만들 수 있어요.`);
     // 하루짜리 구간이 하나라도 있으면 그날 안에서 종료가 시작보다 늦어야 한다
-    const sameDay = weekly || !isGroup || slots.some((s) => s.start === s.end);
+    const sameDay = weekly || !isGroup || groupMulti || slots.some((s) => s.start === s.end);
     if (sameDay && activeTimes.some((t) => toMin(t.end) <= toMin(t.start))) e.push('종료 시간이 시작 시간보다 늦어야 해요.');
     const ordered = [...activeTimes].sort((a, b) => toMin(a.start) - toMin(b.start));
     if (ordered.some((t, i) => i > 0 && toMin(t.start) < toMin(ordered[i - 1].end))) e.push('시간대끼리 겹치지 않게 골라 주세요.');
@@ -168,7 +172,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
     if (isGroup && mp && !(/^\d+$/.test(mp) && +mp >= 1 && +mp <= 1000)) e.push('참여 정원은 1~1000 사이 숫자로 적어 주세요.');
     if (isGroup && mp && participants.length > +mp) e.push('지정한 참여 멤버가 정원보다 많아요.');
     return e;
-  }, [title, pickedCals, isGroup, groupOkNow, weekly, dates, runs, slots, activeTimes, maxPeople, participants]);
+  }, [title, pickedCals, isGroup, groupOkNow, groupMulti, weekly, dates, runs, slots, activeTimes, maxPeople, participants]);
 
   const toggleCal = (id: string) =>
     setPickedCals((list) => {
@@ -232,7 +236,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
       ? [{ start_time: null, end_time: null }]
       : times.map((t) => ({ start_time: t.start, end_time: t.end }));
     const inputs: EventInput[] = timeList.flatMap((t) =>
-      slots.map((s) => ({ ...base, ...t, start_date: s.start, end_date: s.end, repeat_until: weekly ? s.end : null })),
+      slots.map((s) => ({ ...base, ...t, start_date: s.start, end_date: s.end, repeat_until: weekly ? s.end : null, event_dates: s.dates ?? null })),
     );
 
     setBusy(true);
@@ -254,6 +258,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
                 repeat_weekdays: inp.repeat_weekdays,
                 repeat_until: inp.repeat_until,
                 excluded_dates: inp.excluded_dates,
+                event_dates: inp.event_dates,
               },
               nameOf,
             )),
@@ -419,7 +424,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
               <span className="muted">~</span>
               <select className="input" value={t.end} disabled={allDay} aria-label={`종료 시간${i ? ` ${i + 1}` : ''}`} onChange={(e) => setTime(i, 'end', e.target.value)}>
                 {ENDS.map((v) => (
-                  <option key={v} disabled={toMin(v) <= toMin(t.start) && (weekly || !isGroup || runs.some(([s, e]) => s === e))}>
+                  <option key={v} disabled={toMin(v) <= toMin(t.start) && (weekly || !isGroup || groupMulti || runs.some(([s, e]) => s === e))}>
                     {v}
                   </option>
                 ))}

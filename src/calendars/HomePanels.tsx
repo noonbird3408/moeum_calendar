@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Announcement, CalendarEvent, EventInput } from '@/types';
 import { fmtMD, fmtMDW, todayYmd } from '@/lib/dates';
-import { nextOccurrence } from '@/lib/recurrence';
+import { hasOccurrences, nextOccurrence } from '@/lib/recurrence';
 import { dday } from '@/calendar/UpcomingGroups';
 import { textOn } from '@/lib/colors';
 import { scheduleText } from '@/calendar/eventUtils';
@@ -204,7 +204,7 @@ function useMyGroupEvents(ids: string[], userId: string) {
       for (const r of (data ?? []) as unknown as { event: CalendarEvent | null }[]) {
         const e = r.event;
         if (!e || !e.is_group || e.author_id === userId || !list.has(e.calendar_id) || e.end_date < today) continue;
-        const when = e.repeat_weekdays ? nextOccurrence(e, today) : e.start_date < today ? today : e.start_date;
+        const when = hasOccurrences(e) ? nextOccurrence(e, today) : e.start_date < today ? today : e.start_date;
         if (when) out.push({ ...e, when });
       }
       out.sort((a, b) => a.when.localeCompare(b.when) || (a.start_time ?? '').localeCompare(b.start_time ?? ''));
@@ -247,7 +247,7 @@ export function HomeGroupEvents({ calendars }: { calendars: CalLite[] }) {
           <ul className="mine-list group-list">
             {rows.map((e) => {
               const cal = byId.get(e.calendar_id);
-              const ongoing = !e.repeat_weekdays && e.start_date < e.when;
+              const ongoing = !hasOccurrences(e) && e.start_date < e.when;
               return (
                 <li key={e.id} className="mine-row">
                   <span className="up-dday group-dday" style={{ background: cal?.group_color ?? '#FF6B35', color: textOn(cal?.group_color ?? '#FF6B35') }}>
@@ -258,7 +258,7 @@ export function HomeGroupEvents({ calendars }: { calendars: CalLite[] }) {
                       {e.repeat_weekdays && <span className="badge badge-recur">↻ 정기</span>} {e.title}
                     </span>
                     <span className="my-sub">
-                      <b>{e.repeat_weekdays ? `다음 ${fmtMDW(e.when)}` : fmtMDW(e.start_date)}</b>
+                      <b>{hasOccurrences(e) ? `다음 ${fmtMDW(e.when)}` : fmtMDW(e.start_date)}</b>
                       {' · '}
                       {scheduleText(e)}
                       {cal && <span className="mine-cal"> · {cal.name}</span>}
