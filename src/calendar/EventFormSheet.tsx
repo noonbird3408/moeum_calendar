@@ -22,6 +22,7 @@ type Props = {
   adminOf: (calendarId: string) => boolean;
   members?: Profile[]; // 전체 일정 참여 멤버 후보 (캘린더 화면에서만 넘긴다)
   allowGroup?: boolean; // 메인 화면에서는 개인 일정만 추가한다
+  toAllCalendars?: boolean; // 메인 화면: 새 일정은 내가 속한 캘린더 전체에 추가 (고르는 칸 없음)
   onClose: () => void;
   onCreate: (input: EventInput, calendarIds: string[]) => Promise<CalendarEvent[]>;
   onUpdate: (id: string, input: EventInput) => Promise<void>;
@@ -57,12 +58,14 @@ type Slot = { start: string; end: string };
 type TimeRange = { start: string; end: string };
 type NewImage = { file: File; url: string };
 
-export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, members, allowGroup = true, onClose, onCreate, onUpdate }: Props) {
+export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, members, allowGroup = true, toAllCalendars = false, onClose, onCreate, onUpdate }: Props) {
   const { toast } = useFeedback();
   const editing = target?.event;
   const baseDate = editing?.series_start_date ?? editing?.start_date ?? target?.date ?? todayYmd();
 
-  const [pickedCals, setPickedCals] = useState<string[]>(() => [editing?.calendar_id ?? defaultCalendarId]);
+  const [pickedCals, setPickedCals] = useState<string[]>(() =>
+    editing ? [editing.calendar_id] : toAllCalendars ? calendars.map((c) => c.id) : [defaultCalendarId],
+  );
   const groupOk = (ids: string[]) => ids.length > 0 && ids.every((id) => adminOf(id));
   const [kind, setKind] = useState<'personal' | 'group'>(editing ? (editing.is_group ? 'group' : 'personal') : target?.group && allowGroup ? 'group' : 'personal');
 
@@ -336,7 +339,13 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
           </div>
         )}
 
-        {calendars.length > 1 && !editing && (
+        {toAllCalendars && !editing && calendars.length > 1 && (
+          <p className="muted small all-cals-note">
+            <Icon name="calendar" size={14} /> 내가 참여한 캘린더 {calendars.length}곳에 모두 추가돼요.
+          </p>
+        )}
+
+        {!toAllCalendars && calendars.length > 1 && !editing && (
           <div className="field">
             <span className="field-label">추가할 캘린더</span>
             <div className="chip-wrap">

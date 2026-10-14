@@ -226,6 +226,7 @@ export function AggregateCalendar({ calendars, side }: { calendars: CalLite[]; s
           defaultCalendarId={calendars[0].id}
           adminOf={adminOf}
           allowGroup={false}
+          toAllCalendars
           onClose={() => setForm(null)}
           onCreate={createEvent}
           onUpdate={updateEvent}

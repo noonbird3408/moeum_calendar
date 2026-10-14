@@ -102,8 +102,10 @@ export function MyEventsSheet({
   onEdit,
   onAdd,
   calendarName,
+  canManage = () => true,
 }: {
   open: boolean;
+  canManage?: (e: CalendarEvent) => boolean; // 수정·삭제 가능 여부 (전체 일정은 관리자만)
   rows: CalendarEvent[] | null;
   calendarName?: (calendarId: string) => string; // 메인 화면처럼 여러 캘린더를 함께 보여줄 때
   onClose: () => void;
@@ -115,10 +117,11 @@ export function MyEventsSheet({
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const all = rows ?? [];
-  const allOn = all.length > 0 && picked.size === all.length;
+  const manageable = all.filter(canManage);
+  const allOn = manageable.length > 0 && manageable.every((e) => picked.has(e.id));
 
-  // 목록이 바뀌면 사라진 항목은 선택에서 뺀다
-  const liveIds = useMemo(() => new Set(all.map((e) => e.id)), [all]);
+  // 목록이 바뀌면 사라진 항목·권한 없는 항목은 선택에서 뺀다
+  const liveIds = useMemo(() => new Set(manageable.map((e) => e.id)), [manageable]);
   const selected = [...picked].filter((id) => liveIds.has(id));
 
   const toggle = (id: string) =>
@@ -129,13 +132,13 @@ export function MyEventsSheet({
       return n;
     });
 
-  const toggleAll = () => setPicked(allOn ? new Set() : new Set(all.map((e) => e.id)));
+  const toggleAll = () => setPicked(allOn ? new Set() : new Set(manageable.map((e) => e.id)));
 
   const removeSelected = async () => {
     if (!selected.length) return;
     const ok = await confirm({
       title: `${selected.length}개 일정을 삭제할까요?`,
-      message: '삭제하면 되돌릴 수 없어요. 정기 일정은 반복 전체가 함께 지워져요.',
+      message: '삭제하면 되돌릴 수 없어요. 정기 일정은 반복 전체가 함께 지워져요. 전체 일정은 캘린더의 모든 멤버에게서 사라져요.',
       confirmText: '삭제',
       danger: true,
     });
@@ -153,20 +156,26 @@ export function MyEventsSheet({
     }
   };
 
-  const recurring = all.filter((e) => e.repeat_weekdays);
-  const plain = all.filter((e) => !e.repeat_weekdays);
+  const groups = all.filter((e) => e.is_group);
+  const recurring = all.filter((e) => !e.is_group && e.repeat_weekdays);
+  const plain = all.filter((e) => !e.is_group && !e.repeat_weekdays);
 
-  const row = (e: CalendarEvent) => (
-    <li key={e.id} className={`mine-row ${picked.has(e.id) ? 'on' : ''}`}>
+  const row = (e: CalendarEvent) => {
+    const ok = canManage(e);
+    return (
+    <li key={e.id} className={`mine-row ${picked.has(e.id) ? 'on' : ''} ${ok ? '' : 'locked'}`}>
       <input
         type="checkbox"
         className="mine-check"
-        checked={picked.has(e.id)}
+        checked={ok && picked.has(e.id)}
+        disabled={!ok}
         onChange={() => toggle(e.id)}
-        aria-label={`${e.title} 선택`}
+        aria-label={ok ? `${e.title} 선택` : `${e.title} (관리자만 삭제 가능)`}
+        title={ok ? undefined : '관리자만 삭제할 수 있어요'}
       />
       <button type="button" className="mine-main" onClick={() => onOpen(e)}>
         <span className="my-title">
+          {e.is_group && <span className="badge badge-group">전체</span>}
           {e.repeat_weekdays && <span className="badge badge-recur">↻ 정기</span>} {e.title}
         </span>
         <span className="my-sub">
@@ -174,11 +183,14 @@ export function MyEventsSheet({
           {scheduleText(e)}
         </span>
       </button>
-      <button type="button" className="btn btn-ghost btn-small" onClick={() => onEdit(e)} aria-label={`${e.title} 수정`}>
-        <Icon name="edit" size={16} /> 수정
-      </button>
+      {ok && (
+        <button type="button" className="btn btn-ghost btn-small" onClick={() => onEdit(e)} aria-label={`${e.title} 수정`}>
+          <Icon name="edit" size={16} /> 수정
+        </button>
+      )}
     </li>
-  );
+    );
+  };
 
   return (
     <Sheet
@@ -208,6 +220,12 @@ export function MyEventsSheet({
             </label>
             <span className="muted small">{selected.length ? `${selected.length}개 선택` : `${all.length}개`}</span>
           </div>
+          {groups.length > 0 && (
+            <section className="day-section">
+              <h3>전체 일정</h3>
+              <ul className="mine-list">{groups.map(row)}</ul>
+            </section>
+          )}
           {recurring.length > 0 && (
             <section className="day-section">
               <h3>정기 일정</h3>

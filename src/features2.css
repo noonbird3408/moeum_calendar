@@ -2126,3 +2126,33 @@
   font-weight: 700;
   text-transform: uppercase;
 }
+
+/* 양옆 탭(패널)은 알맞은 폭까지만 커지고, 남는 공간은 가운데 달력이 차지한다 */
+@media (min-width: 768px) {
+  .cal-layout {
+    grid-template-columns: minmax(0, 1fr) clamp(200px, 24%, 260px);
+  }
+}
+@media (min-width: 860px) {
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr) clamp(250px, 21%, 290px);
+  }
+}
+@media (min-width: 1024px) {
+  .cal-layout {
+    grid-template-columns: clamp(220px, 18%, 280px) minmax(0, 1fr) clamp(210px, 16%, 260px);
+  }
+  .agg-layout {
+    grid-template-columns: clamp(190px, 16%, 240px) minmax(0, 1fr);
+  }
+}
+.all-cals-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 0;
+}
+.mine-row.locked .mine-check {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

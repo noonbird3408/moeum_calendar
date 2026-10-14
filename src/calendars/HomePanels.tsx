@@ -16,7 +16,7 @@ import type { CalLite } from './AggregateCalendar';
 
 const uniq = () => Math.random().toString(36).slice(2, 8);
 
-/** 내가 등록한 개인 일정 (모든 캘린더, 오늘 이후) — 정기 일정 먼저, 나머지는 날짜순 */
+/** 내가 등록한 개인 일정 + 내 캘린더들의 진행 중·예정 전체 일정 (오늘 이후) — 정기 일정 먼저, 나머지는 날짜순 */
 function useAllMyEvents(ids: string[], userId: string) {
   const [rows, setRows] = useState<CalendarEvent[] | null>(null);
   const key = ids.join(',');
@@ -31,8 +31,7 @@ function useAllMyEvents(ids: string[], userId: string) {
         .from('events')
         .select('*')
         .in('calendar_id', list)
-        .eq('author_id', userId)
-        .eq('is_group', false)
+        .or(`is_group.eq.true,and(is_group.eq.false,author_id.eq.${userId})`)
         .gte('end_date', todayYmd())
         .order('start_date')
         .limit(500);
@@ -148,9 +147,11 @@ export function HomeMyEvents({ calendars }: { calendars: CalLite[] }) {
         open={open && !form}
         rows={rows}
         calendarName={(id) => byId.get(id)?.name ?? ''}
+        canManage={(e) => !e.is_group || adminOf(e.calendar_id)}
         onClose={() => setOpen(false)}
         onOpen={(e) => navigate(`/c/${e.calendar_id}?event=${e.id}`)}
-        onEdit={(e) => setForm({ key: Date.now(), target: { event: e } })}
+        // 전체 일정은 참여 멤버·사진까지 다루는 캘린더 화면에서 고친다
+        onEdit={(e) => (e.is_group ? navigate(`/c/${e.calendar_id}?event=${e.id}`) : setForm({ key: Date.now(), target: { event: e } }))}
         onAdd={() => setForm({ key: Date.now(), target: { date: todayYmd() } })}
       />
       {form && (
@@ -161,6 +162,7 @@ export function HomeMyEvents({ calendars }: { calendars: CalLite[] }) {
           defaultCalendarId={editing?.calendar_id ?? calendars[0].id}
           adminOf={adminOf}
           allowGroup={false}
+          toAllCalendars
           onClose={() => setForm(null)}
           onCreate={onCreate}
           onUpdate={onUpdate}
