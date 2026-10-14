@@ -39,9 +39,9 @@
 
 1. **프로젝트 생성**: Supabase → New project (리전: Northeast Asia (Seoul) 권장).
 2. **DB 설치**: 왼쪽 메뉴 **SQL Editor → New query** 에 `supabase/setup.sql` 내용을 전부 붙여넣고 **Run**.
-   - 같은 내용이 `supabase/migrations/` 에 11개 파일로도 나뉘어 있습니다 (Supabase CLI 사용 시 순서대로 실행).
+   - 같은 내용이 `supabase/migrations/` 에 12개 파일로도 나뉘어 있습니다 (Supabase CLI 사용 시 순서대로 실행).
    - `setup.sql` 은 여러 번 실행해도 안전합니다. `relation already exists` 같은 오류가 나지 않도록 모든 구문이 멱등하게 작성되어 있습니다.
-   - **이미 설치한 프로젝트를 올릴 때**는 `setup.sql` 전체를 다시 실행하면 됩니다(멱등). 새 파일만 실행하려면 v0.4 `…07_notices_admin_participants.sql`, v0.5 `…08_notice_rich.sql`, v0.6 `…09_v06.sql`, v0.7 `…10_notice_event_tag.sql`, v0.8 `…11_security_hardening.sql` 을 순서대로 실행하세요.
+   - **이미 설치한 프로젝트를 올릴 때**는 `setup.sql` 전체를 다시 실행하면 됩니다(멱등). 새 파일만 실행하려면 v0.4 `…07_notices_admin_participants.sql`, v0.5 `…08_notice_rich.sql`, v0.6 `…09_v06.sql`, v0.7 `…10_notice_event_tag.sql`, v0.8 `…11_security_hardening.sql`, `…12_occurrence_exceptions.sql` 을 순서대로 실행하세요.
      - v0.8: 권한 정리(anon 차단·TRUNCATE 회수·내부 함수 실행 금지), 값 검사, 사용량·도배 제한, 접속 표시 비공개 채널 정책
      - v0.7: 공지사항에 전체 일정 태그(`announcements.event_id`, 같은 캘린더의 전체 일정만), 공지의 캘린더·작성자 변경 차단
      - v0.6: 캘린더 설명·헤더 모양, 댓글 수정·답글, 전체 일정 사진(비공개 `event-images` 버킷)·참여 정원, 공용·개인 메모, 초대코드 대입 방지, 프로필 사진 저장소 제한
@@ -52,7 +52,7 @@
 
      - 프로필 사진 저장소(`avatars` 공개 버킷)와 본인 폴더 전용 업로드·삭제 정책
      - 단체 일정 참여(`event_participants`)·댓글(`event_comments`) 테이블과 RLS
-     - 요일 반복 컬럼(`repeat_weekdays`, `repeat_until`), 링크(`link_url`), 리치 본문(`body_rich`)
+     - 요일 반복 컬럼(`repeat_weekdays`, `repeat_until`, `excluded_dates`), 링크(`link_url`), 리치 본문(`body_rich`)
      - 최근 사용 색(`profiles.recent_colors`)
      - 계정 삭제 함수 `delete_my_account()`
 3. **API 키 복사**: Project Settings → API (또는 API Keys) 에서 `Project URL` 과 `anon`(또는 `publishable`) 키를 복사합니다.
@@ -127,8 +127,8 @@ npm run dev
 
 ```text
 supabase/
-  setup.sql                 한 번에 설치하는 SQL (migrations 001~006 합본)
-  migrations/               001 스키마 · 002 RLS · 003 RPC · 004 Realtime · 005 정기 일정 · 006 v0.3(사진·참여·댓글·요일 반복·계정 삭제) · 007 v0.4(공지사항·참여자 관리 정책) · 008 v0.5(공지 서식 본문) · 009 v0.6(캘린더 탭·댓글·사진·정원·메모·보안) · 010 v0.7(공지 일정 태그) · 011 v0.8(보안 보강)
+  setup.sql                 한 번에 설치하는 SQL (migrations 001~012 합본)
+  migrations/               001 스키마 · 002 RLS · 003 RPC · 004 Realtime · 005 정기 일정 · 006 v0.3(사진·참여·댓글·요일 반복·계정 삭제) · 007 v0.4(공지사항·참여자 관리 정책) · 008 v0.5(공지 서식 본문) · 009 v0.6(캘린더 탭·댓글·사진·정원·메모·보안) · 010 v0.7(공지 일정 태그) · 011 v0.8(보안 보강) · 012 반복 회차 예외
   tests/permissions.test.sql  권한·RLS·계정 삭제 검증 (로컬 Postgres 에서 실행, 마지막 줄 ALL TESTS PASSED)
 src/
   App.tsx                   라우트 + 로그인/프로필 관문
@@ -150,7 +150,7 @@ src/
 ## 10. 참고
 
 - 시간은 모든 사용자가 한국 시간을 쓴다는 전제로 `date` + `time` 으로 저장합니다. 시간을 정하지 않으면 하루종일 일정입니다.
-- 요일 반복 일정은 DB 에 한 행(첫 날 ~ 반복 종료일, 요일 목록)으로 저장하고, 화면에서 해당 요일마다 하루짜리 회차로 펼칩니다. 한 회차만 바꾸거나 지우는 기능은 없고, 일정 전체를 수정·삭제합니다.
+- 요일 반복 일정은 DB 에 한 행(첫 날 ~ 반복 종료일, 요일 목록)으로 저장하고, 화면에서 해당 요일마다 하루짜리 회차로 펼칩니다. 회차 상세에서 해당 날짜만 제외할 수 있고, 일정 상세의 제외 날짜 목록에서 다시 포함할 수 있습니다.
 - 카카오톡·인스타그램 앱 안의 브라우저는 구글 로그인을 막기 때문에, 로그인 화면에서 외부 브라우저로 여는 버튼을 보여줍니다.
 - 모두 가능한 날짜 계산 기준은 활동 09~24시, 최소 2시간 빈 시간으로 고정되어 있습니다(필터 기능 없음). 반복 일정도 계산에 포함됩니다.
 - 단체 일정 링크 미리보기는 유튜브·X 만 제목·썸네일을 가져옵니다. 다른 사이트는 주소 카드만 보여줍니다(별도 서버가 없어 임의 사이트의 메타 정보를 가져올 수 없습니다).

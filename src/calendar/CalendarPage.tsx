@@ -86,7 +86,16 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [myOpen, setMyOpen] = useState(false);
 
-  const detail = detailId ? (ev.events.find((e) => e.id === detailId) ?? (detailSnap?.id === detailId ? detailSnap : null)) : null;
+  const detailRow = detailId ? ev.events.find((e) => e.id === detailId) : undefined;
+  const detail = detailRow
+    ? {
+        ...detailRow,
+        occ: detailSnap?.id === detailId ? detailSnap.occ : undefined,
+        series_start_date: detailSnap?.id === detailId ? detailSnap.series_start_date ?? detailRow.start_date : undefined,
+      }
+    : detailId && detailSnap?.id === detailId
+      ? detailSnap
+      : null;
   const groupColor = meta.calendar?.group_color ?? '#FF6B35';
 
   useEffect(() => {
@@ -384,6 +393,7 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
         onClose={() => setDetailId(null)}
         onEdit={(e) => openForm({ event: e })}
         onDelete={ev.remove}
+        onToggleOccurrenceException={ev.setOccurrenceExcluded}
       />
       <MyEventsSheet
         open={myOpen}

@@ -55,7 +55,7 @@ type NewImage = { file: File; url: string };
 export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, members, allowGroup = true, onClose, onCreate, onUpdate }: Props) {
   const { toast } = useFeedback();
   const editing = target?.event;
-  const baseDate = editing?.start_date ?? target?.date ?? todayYmd();
+  const baseDate = editing?.series_start_date ?? editing?.start_date ?? target?.date ?? todayYmd();
 
   const [pickedCals, setPickedCals] = useState<string[]>(() => [editing?.calendar_id ?? defaultCalendarId]);
   const groupOk = (ids: string[]) => ids.length > 0 && ids.every((id) => adminOf(id));

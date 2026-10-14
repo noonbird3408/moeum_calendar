@@ -238,6 +238,25 @@ export function useEvents(calendarId: string, myId: string, from: string, to: st
     [upsert],
   );
 
+  const setOccurrenceExcluded = useCallback(
+    async (id: string, date: string, excluded: boolean) => {
+      const event = events.find((e) => e.id === id);
+      if (!event) throw new Error('NO_ROWS');
+      const dates = new Set(event.excluded_dates ?? []);
+      if (excluded) dates.add(date);
+      else dates.delete(date);
+      const { data, error } = await supabase
+        .from('events')
+        .update({ excluded_dates: [...dates].sort() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      upsert(data as CalendarEvent);
+    },
+    [events, upsert],
+  );
+
   const remove = useCallback(async (id: string) => {
     const { data, error } = await supabase.from('events').delete().eq('id', id).select('id, image_paths');
     if (error) throw error;
@@ -247,5 +266,5 @@ export function useEvents(calendarId: string, myId: string, from: string, to: st
     setEvents((list) => list.filter((e) => e.id !== id));
   }, []);
 
-  return { events, loading, create, update, remove, reload: load };
+  return { events, loading, create, update, setOccurrenceExcluded, remove, reload: load };
 }

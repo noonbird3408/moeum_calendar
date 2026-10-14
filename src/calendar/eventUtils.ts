@@ -44,7 +44,7 @@ export const nicknameOf = (profiles: Map<string, Profile>, id: string) => profil
 export function scheduleText(e: CalendarEvent) {
   if (e.repeat_weekdays && e.repeat_until) {
     const time = e.start_time ? ` ${fmtTime(e.start_time)}~${fmtTime(e.end_time)}` : ' 하루종일';
-    return `매주 ${weekdaysText(e.repeat_weekdays)}${time} · ${fmtMD(e.start_date)} ~ ${fmtMD(e.repeat_until)}`;
+    return `매주 ${weekdaysText(e.repeat_weekdays)}${time} · ${fmtMD(e.series_start_date ?? e.start_date)} ~ ${fmtMD(e.repeat_until)}`;
   }
   return periodText(e);
 }

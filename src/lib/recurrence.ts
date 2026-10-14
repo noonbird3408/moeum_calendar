@@ -14,8 +14,11 @@ export function expandEvents(events: CalendarEvent[], from: string, to: string):
     const end = e.repeat_until < to ? e.repeat_until : to;
     if (start > end) continue;
     const days = e.repeat_weekdays;
+    const excluded = new Set(e.excluded_dates ?? []);
     for (let d = start, n = diffDays(start, end); n >= 0; n--, d = addDays(d, 1)) {
-      if (days.includes(weekday(d))) out.push({ ...e, occ: d, start_date: d, end_date: d });
+      if (days.includes(weekday(d)) && !excluded.has(d)) {
+        out.push({ ...e, occ: d, series_start_date: e.start_date, start_date: d, end_date: d });
+      }
     }
   }
   return out;

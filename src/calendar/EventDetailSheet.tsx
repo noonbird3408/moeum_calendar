@@ -24,6 +24,7 @@ type Props = {
   onClose: () => void;
   onEdit: (e: CalendarEvent) => void;
   onDelete: (id: string) => Promise<void>;
+  onToggleOccurrenceException: (id: string, date: string, excluded: boolean) => Promise<void>;
 };
 
 /** 본문 텍스트: http(s) 주소는 누를 수 있는 링크로 바꾼다 (HTML 로 넣지 않으므로 안전) */
@@ -43,9 +44,21 @@ function Linkified({ text }: { text: string }) {
   );
 }
 
-export function EventDetailSheet({ event, profiles, groupColor, myId, canEdit, isAdmin, onClose, onEdit, onDelete }: Props) {
+export function EventDetailSheet({
+  event,
+  profiles,
+  groupColor,
+  myId,
+  canEdit,
+  isAdmin,
+  onClose,
+  onEdit,
+  onDelete,
+  onToggleOccurrenceException,
+}: Props) {
   const { toast, confirm } = useFeedback();
   const [busy, setBusy] = useState(false);
+  const [exceptionBusy, setExceptionBusy] = useState(false);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [zoom, setZoom] = useState<string | null>(null);
   const extras = useGroupExtras(event?.is_group ? event.id : null, myId);
@@ -97,6 +110,19 @@ export function EventDetailSheet({ event, profiles, groupColor, myId, canEdit, i
   };
 
   const occDate = event?.occ;
+  const excludedDates = [...(event?.excluded_dates ?? [])].sort();
+  const toggleException = async (date: string, excluded: boolean) => {
+    if (!event) return;
+    setExceptionBusy(true);
+    try {
+      await onToggleOccurrenceException(event.id, date, excluded);
+      toast(excluded ? '이 회차를 반복에서 제외했어요.' : '이 날짜를 반복에 다시 포함했어요.', 'success');
+    } catch (err) {
+      toast(errorMessage(err), 'error');
+    } finally {
+      setExceptionBusy(false);
+    }
+  };
 
   return (
     <Sheet
@@ -149,6 +175,43 @@ export function EventDetailSheet({ event, profiles, groupColor, myId, canEdit, i
               </>
             )}
           </dl>
+
+          {event.repeat_weekdays && ((canEdit && !!occDate) || excludedDates.length > 0) && (
+            <section className="detail-exceptions" aria-label="반복 일정 예외">
+              {canEdit && occDate && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={exceptionBusy}
+                  onClick={() => toggleException(occDate, !excludedDates.includes(occDate))}
+                >
+                  {excludedDates.includes(occDate) ? '이 날짜 다시 포함' : '이 날짜만 반복에서 제외'}
+                </button>
+              )}
+              {excludedDates.length > 0 && (
+                <div>
+                  <p className="muted small">제외한 날짜</p>
+                  <ul className="exception-dates">
+                    {excludedDates.map((date) => (
+                      <li key={date}>
+                        <span>{fmtMD(date)} ({WEEKDAYS[weekday(date)]})</span>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="mini-act"
+                            disabled={exceptionBusy}
+                            onClick={() => toggleException(date, false)}
+                          >
+                            다시 포함
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
 
           {isGroup && event.memo && (
             <div className="post-body" aria-label="본문">

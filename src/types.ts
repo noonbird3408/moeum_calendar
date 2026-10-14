@@ -39,6 +39,7 @@ export type CalendarEvent = {
   end_time: string | null;
   repeat_weekdays: number[] | null; // 0(일)~6(토), 반복 일정만
   repeat_until: string | null;
+  excluded_dates?: string[]; // 반복 일정에서 제외한 날짜
   link_url: string | null;
   image_paths?: string[]; // 전체 일정 사진 (event-images 버킷 경로)
   max_participants?: number | null; // 참여 정원 (전체 일정)
@@ -46,6 +47,8 @@ export type CalendarEvent = {
   updated_at: string;
   /** 화면에 펼쳐 놓은 회차의 날짜 (반복 일정을 날짜마다 펼칠 때만 채움) */
   occ?: string;
+  /** 화면에 펼칠 때 보존하는 반복 일정의 실제 시작일 */
+  series_start_date?: string;
 };
 
 export type EventInput = {
