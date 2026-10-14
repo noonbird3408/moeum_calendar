@@ -101,9 +101,11 @@ export function MyEventsSheet({
   onOpen,
   onEdit,
   onAdd,
+  calendarName,
 }: {
   open: boolean;
   rows: CalendarEvent[] | null;
+  calendarName?: (calendarId: string) => string; // 메인 화면처럼 여러 캘린더를 함께 보여줄 때
   onClose: () => void;
   onOpen: (e: CalendarEvent) => void;
   onEdit: (e: CalendarEvent) => void;
@@ -167,7 +169,10 @@ export function MyEventsSheet({
         <span className="my-title">
           {e.repeat_weekdays && <span className="badge badge-recur">↻ 정기</span>} {e.title}
         </span>
-        <span className="my-sub">{scheduleText(e)}</span>
+        <span className="my-sub">
+          {calendarName && <span className="mine-cal">{calendarName(e.calendar_id)} · </span>}
+          {scheduleText(e)}
+        </span>
       </button>
       <button type="button" className="btn btn-ghost btn-small" onClick={() => onEdit(e)} aria-label={`${e.title} 수정`}>
         <Icon name="edit" size={16} /> 수정

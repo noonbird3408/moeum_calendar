@@ -4,7 +4,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { addMonths, fmtMonthTitle, isSameMonth, monthGrid, parseYmd, startOfMonth, todayYmd } from '@/lib/dates';
 import { useIsMobile } from '@/lib/hooks';
 import { setPrefs, usePrefs } from '@/lib/prefs';
-import { expandEvents } from '@/lib/recurrence';
+import { expandEvents, nextOccurrence } from '@/lib/recurrence';
 import { Link, useRouter } from '@/lib/router';
 import { computeAvailability, type Chip } from '@/availability/computeAvailability';
 import { AvailabilityPanel, HighlightToggles } from '@/availability/AvailabilityChips';
@@ -114,6 +114,33 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
     setDaySheet({ date: dateParam });
     navigate(`/c/${calendarId}`, { replace: true });
   }, [dateParam, calendarId, navigate]);
+
+  // 메인 화면의 내 일정·공지에서 넘어온 경우 (?event=id): 그 일정이 있는 달로 옮겨 상세를 연다
+  const eventParam = search.get('event');
+  useEffect(() => {
+    if (!eventParam) return;
+    let alive = true;
+    supabase
+      .from('events')
+      .select('*')
+      .eq('id', eventParam)
+      .eq('calendar_id', calendarId)
+      .maybeSingle()
+      .then(({ data }: { data: CalendarEvent | null }) => {
+        if (!alive) return;
+        navigate(`/c/${calendarId}`, { replace: true });
+        if (!data) return toast('일정을 찾을 수 없어요. 삭제되었을 수 있어요.', 'error');
+        const today0 = todayYmd();
+        // 반복 일정은 다가오는 회차가 있는 달로
+        const shown = data.repeat_weekdays ? (nextOccurrence(data, today0) ?? data.start_date) : data.start_date < today0 && data.end_date >= today0 ? today0 : data.start_date;
+        setMonth(startOfMonth(parseYmd(shown)));
+        setDetailSnap(data);
+        setDetailId(data.id);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [eventParam, calendarId, navigate, toast]);
 
   // 상세를 보고 있던 일정이 다른 사람에 의해 삭제되면 닫기 (보이는 기간 안에서만 판단)
   useEffect(() => {

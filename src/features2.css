@@ -1728,25 +1728,57 @@
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
-/* 요일 반복: 회차는 옅게 칠해 '체크'된 것처럼, 우클릭·꾹 눌러 뺀 날은 칠 없이 취소선 */
+/* 요일 반복: 회차는 옅게 칠해 '체크'된 것처럼, 우클릭·꾹 눌러 뺀 날은 고르지 않은 다른 날과 똑같이 보인다 */
 .range-day.occ:not(.picked) {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
   border-radius: 8px;
 }
-.range-day.exception {
-  color: var(--fg-faint);
-  text-decoration: line-through;
-  text-decoration-color: var(--danger);
-  text-decoration-thickness: 2px;
-}
-.range-day.exception.picked {
-  color: var(--accent-fg);
-}
 .range-day.occ::after,
 .range-day.exception::after {
   display: none;
+}
+
+/* 메인 화면 우측: 내 일정 · 공지사항 탭 (개수 + 전체 보기) */
+.count-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.count-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.count-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.count-title {
+  font-weight: 700;
+}
+.count-num {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mine-cal {
+  font-weight: 600;
+}
+.home-notice-list .notice-cal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
 }
 /* 시간대 + / × */
 .time-add,

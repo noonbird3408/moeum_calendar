@@ -1,4 +1,4 @@
-// 메인 화면: 좌측 모음달력 + 그 아래 초대코드 참여 / 우측 프로필 카드 + 내 캘린더 / 하단 다가오는 단체 일정
+// 메인 화면: 좌측 모음달력 + 그 아래 초대코드 참여 / 우측 프로필 카드 + 내 캘린더 + 내 일정·공지사항 탭 / 하단 다가오는 단체 일정
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Role } from '@/types';
 import { useAuth } from '@/auth/AuthProvider';
@@ -13,6 +13,7 @@ import { Sheet } from '@/ui/Sheet';
 import { useFeedback } from '@/ui/Feedback';
 import { UpcomingGroups } from '@/calendar/UpcomingGroups';
 import { AggregateCalendar, type CalLite } from './AggregateCalendar';
+import { HomeMyEvents, HomeNotices } from './HomePanels';
 
 type Row = { role: Role; joined_at: string; calendar: { id: string; name: string; group_color: string } | null };
 
@@ -157,6 +158,9 @@ export function HomePage() {
             )}
           </section>
 
+          {/* 내 일정 · 공지사항: 개수만 보이고 '전체 보기'로 목록을 연다 */}
+          <HomeMyEvents calendars={lite} />
+          <HomeNotices calendars={lite} />
         </aside>
       </div>
 

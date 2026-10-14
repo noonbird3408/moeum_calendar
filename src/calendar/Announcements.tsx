@@ -165,7 +165,7 @@ export function AnnouncementsPanel({
 }
 
 /** 공지를 게시글처럼 보기: 제목 · 작성자 · 시각 · 본문 · 링크 미리보기 · 태그한 일정 */
-function NoticeView({
+export function NoticeView({
   item,
   author,
   isAdmin,
