@@ -174,7 +174,7 @@ export function AggregateCalendar({ calendars, side }: { calendars: CalLite[]; s
           <Icon name="chevron-right" />
         </button>
       </div>
-      <button type="button" className="btn btn-primary btn-add" onClick={() => setForm({ key: Date.now(), target: { date: addDate } })}>
+      <button type="button" className="btn btn-primary btn-add" onClick={() => setForm({ key: Date.now(), target: { month: addDate } })}>
         <Icon name="plus" size={18} /> 일정 추가
       </button>
     </div>

@@ -315,7 +315,7 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
                 ]}
               />
             ) : (
-              <button type="button" className="btn btn-primary btn-add" onClick={() => openForm({ date: addDate })}>
+              <button type="button" className="btn btn-primary btn-add" onClick={() => openForm({ month: addDate })}>
                 <Icon name="plus" size={18} /> 일정 추가
               </button>
             )}
@@ -383,7 +383,7 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
       </div>
 
       {isMobile && (
-        <button type="button" className="fab" aria-label="일정 추가" onClick={() => openForm({ date: addDate })}>
+        <button type="button" className="fab" aria-label="일정 추가" onClick={() => openForm({ month: addDate })}>
           <Icon name="plus" size={26} />
         </button>
       )}
@@ -429,7 +429,7 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
         // 전체 보기 시트는 열어 둔 채 위에 상세·수정 시트를 띄운다 (닫으면 목록으로 돌아온다)
         onOpen={openEvent}
         onEdit={(e) => openForm({ event: e })}
-        onAdd={() => openForm({ date: addDate })}
+        onAdd={() => openForm({ month: addDate })}
       />
       {form && (
         <EventFormSheet

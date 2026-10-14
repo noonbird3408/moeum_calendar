@@ -163,7 +163,7 @@ export function HomeMyEvents({ calendars }: { calendars: CalLite[] }) {
         onClose={() => setOpen(false)}
         onOpen={(e) => navigate(`/c/${e.calendar_id}?event=${e.id}`)}
         onEdit={(e) => setForm({ key: Date.now(), target: { event: e } })}
-        onAdd={() => setForm({ key: Date.now(), target: { date: todayYmd() } })}
+        onAdd={() => setForm({ key: Date.now(), target: {} })}
       />
       {form && (
         <EventFormSheet

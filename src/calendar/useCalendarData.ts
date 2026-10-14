@@ -1,7 +1,7 @@
 // 캘린더 정보·멤버·월별 일정 로딩 + Supabase Realtime 동기화
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { removeCalendarImages, removeEventImages } from '@/lib/eventImages';
+import { removeCalendarImages, removeUnusedEventImages } from '@/lib/eventImages';
 import type { Calendar, CalendarEvent, EventInput, Member, Profile, Role } from '@/types';
 
 const uniq = () => Math.random().toString(36).slice(2, 8);
@@ -272,7 +272,7 @@ export function useEvents(calendarId: string, myId: string, from: string, to: st
     if (error) throw error;
     if (!data?.length) throw new Error('NO_ROWS');
     const paths = ((data[0] as { image_paths?: string[] }).image_paths ?? []) as string[];
-    if (paths.length) await removeEventImages(paths).catch(() => undefined);
+    if (paths.length) await removeUnusedEventImages(paths).catch(() => undefined);
     setEvents((list) => list.filter((e) => e.id !== id));
   }, []);
 

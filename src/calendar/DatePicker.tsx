@@ -13,6 +13,7 @@ type Props = {
   excludedDates?: string[];
   onToggleException?: (date: string) => void;
   isOccurrenceDate?: (date: string) => boolean;
+  initialMonth?: string; // 고른 날짜가 없을 때 처음 보여 줄 달 (YYYY-MM-DD)
 };
 
 const between = (a: string, b: string) => {
@@ -50,10 +51,11 @@ export function DatePicker({
   excludedDates = [],
   onToggleException,
   isOccurrenceDate,
+  initialMonth,
 }: Props) {
   const { weekStart } = usePrefs();
   const first = [...selected].sort()[0];
-  const [month, setMonth] = useState(() => startOfMonth(parseYmd(first ?? todayYmd())));
+  const [month, setMonth] = useState(() => startOfMonth(parseYmd(first ?? initialMonth ?? todayYmd())));
   const days = monthGrid(month, weekStart);
   const today = todayYmd();
   // 끌기 상태: 시작 날짜, 켜기/끄기, 시작 전 선택

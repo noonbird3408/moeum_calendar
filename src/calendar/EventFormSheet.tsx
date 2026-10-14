@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { CalendarEvent, EventInput, Profile } from '@/types';
 import { addDays, diffDays, fmtMD, fmtMDFrom, minToTime, toMin, todayYmd, weekday, WEEKDAYS } from '@/lib/dates';
-import { checkImageFile, MAX_IMAGES, removeEventImages, signedUrls, uploadEventImage } from '@/lib/eventImages';
+import { checkImageFile, MAX_IMAGES, removeEventImages, removeUnusedEventImages, signedUrls, uploadEventImage } from '@/lib/eventImages';
 import { errorMessage } from '@/lib/supabase';
 import { findUrls, normalizeUrl } from '@/lib/links';
 import { Sheet } from '@/ui/Sheet';
@@ -11,7 +11,8 @@ import { useFeedback } from '@/ui/Feedback';
 import { DatePicker, runsText, toRuns } from './DatePicker';
 import { findConflicts, loadParticipantIds, syncParticipants, type Conflict } from './groupAssign';
 
-export type FormTarget = { date?: string; event?: CalendarEvent; group?: boolean };
+// date: 달력의 그 날짜를 눌러 열었을 때만 (그날이 미리 골라진다) · month: '일정 추가' 버튼으로 열 때 날짜 달력을 펼칠 달 (아무 날도 고르지 않음)
+export type FormTarget = { date?: string; month?: string; event?: CalendarEvent; group?: boolean };
 
 export type CalOption = { id: string; name: string };
 
@@ -43,8 +44,8 @@ const snap = (t: string | null, fallback: string) => {
 };
 
 /** 수정할 일정의 날짜를 선택 집합으로: 반복 일정은 기간 양 끝, 아니면 기간의 모든 날 */
-function initialDates(e: CalendarEvent | undefined, base: string): Set<string> {
-  if (!e) return new Set([base]);
+function initialDates(e: CalendarEvent | undefined, picked: string | undefined): Set<string> {
+  if (!e) return picked ? new Set([picked]) : new Set();
   if (e.repeat_weekdays && e.repeat_until) {
     // 기간을 따로 안 정한 반복(기본 1년)은 시작일만 보여 준다
     return diffDays(e.start_date, e.repeat_until) === REPEAT_DEFAULT_DAYS ? new Set([e.start_date]) : new Set([e.start_date, e.repeat_until]);
@@ -71,10 +72,11 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
 
   const [title, setTitle] = useState(editing?.title ?? '');
   const [text, setText] = useState(editing?.memo ?? ''); // 개인: 메모 · 전체: 설명(본문)
-  const [dates, setDates] = useState<Set<string>>(() => initialDates(editing, baseDate));
+  const [dates, setDates] = useState<Set<string>>(() => initialDates(editing, target?.date));
   // 날짜를 직접 눌렀는지: 날짜 칸이 아닌 '일정 추가' 버튼으로 열면 오늘이 기본값으로 들어가 있다
   const [datesTouched, setDatesTouched] = useState(!!editing || !!target?.date);
-  const [dateOpen, setDateOpen] = useState(false); // '날짜' 버튼을 누르면 요일·달력이 펼쳐진다
+  // '날짜' 버튼을 누르면 요일·달력이 펼쳐진다. 고른 날짜 없이 열었으면 처음부터 펼쳐 둔다
+  const [dateOpen, setDateOpen] = useState(!editing && !target?.date);
   const [weekdays, setWeekdays] = useState<number[]>(editing?.repeat_weekdays ?? []);
   const [excludedDates, setExcludedDates] = useState<string[]>(editing?.excluded_dates ?? []);
   const [allDay, setAllDay] = useState(editing ? !editing.start_time : true);
@@ -119,7 +121,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
   //  · 요일 반복: 고른 날짜의 처음~끝 (하루만 골랐거나 없으면 그날부터 1년) 동안 매주
   //  · 하루종일: 이어진 날짜마다 한 일정 (10/15~10/17 → 하나)
   //  · 시간 일정: 고른 날마다 한 일정 (매일 19:00~21:00)
-  //  · 전체 일정: 이어진 날짜 한 구간만
+  //  · 전체 일정: 이어진 날짜마다 한 일정 (떨어진 날짜를 고르면 일정이 여러 개 생긴다)
   const slots: Slot[] = useMemo(() => {
     if (weekly) {
       const s = sorted[0] ?? baseDate;
@@ -155,10 +157,10 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
     if (!pickedCals.length) e.push('캘린더를 하나 이상 고르세요.');
     if (isGroup && !groupOkNow) e.push('전체 일정은 선택한 캘린더의 관리자만 만들 수 있어요.');
     if (!weekly && !dates.size) e.push('날짜를 골라 주세요.');
-    if (isGroup && !weekly && runs.length > 1) e.push('전체 일정은 이어진 날짜 한 구간만 고를 수 있어요.');
     if (weekly && slots[0] && diffDays(slots[0].start, slots[0].end) > MAX_REPEAT_SPAN) e.push(`반복 기간은 최대 ${MAX_REPEAT_SPAN + 1}일이에요.`);
     if (slots.length * Math.max(activeTimes.length, 1) > MAX_DAYS) e.push(`한 번에 ${MAX_DAYS}개까지 만들 수 있어요.`);
-    const sameDay = weekly || !isGroup || slots.every((s) => s.start === s.end);
+    // 하루짜리 구간이 하나라도 있으면 그날 안에서 종료가 시작보다 늦어야 한다
+    const sameDay = weekly || !isGroup || slots.some((s) => s.start === s.end);
     if (sameDay && activeTimes.some((t) => toMin(t.end) <= toMin(t.start))) e.push('종료 시간이 시작 시간보다 늦어야 해요.');
     const ordered = [...activeTimes].sort((a, b) => toMin(a.start) - toMin(b.start));
     if (ordered.some((t, i) => i > 0 && toMin(t.start) < toMin(ordered[i - 1].end))) e.push('시간대끼리 겹치지 않게 골라 주세요.');
@@ -278,7 +280,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
         rest = withImages.slice(1);
         // 빠진 사진 파일은 지운다
         const dropped = (editing.image_paths ?? []).filter((p) => !keptImages.includes(p));
-        if (dropped.length) await removeEventImages(dropped).catch(() => undefined);
+        if (dropped.length) await removeUnusedEventImages(dropped).catch(() => undefined);
       }
       for (const inp of rest) {
         const rows = await onCreate(inp, pickedCals);
@@ -394,6 +396,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
                 excludedDates={weekly ? excludedDates : undefined}
                 onToggleException={weekly ? toggleOccurrenceException : undefined}
                 isOccurrenceDate={weekly && slots[0] ? isOcc : undefined}
+                initialMonth={target?.month ?? baseDate}
                 onChange={(next) => {
                   setDates(next);
                   setDatesTouched(true);
@@ -416,7 +419,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
               <span className="muted">~</span>
               <select className="input" value={t.end} disabled={allDay} aria-label={`종료 시간${i ? ` ${i + 1}` : ''}`} onChange={(e) => setTime(i, 'end', e.target.value)}>
                 {ENDS.map((v) => (
-                  <option key={v} disabled={toMin(v) <= toMin(t.start) && (weekly || !isGroup || runs.every(([s, e]) => s === e))}>
+                  <option key={v} disabled={toMin(v) <= toMin(t.start) && (weekly || !isGroup || runs.some(([s, e]) => s === e))}>
                     {v}
                   </option>
                 ))}
