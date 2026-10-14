@@ -43,6 +43,15 @@ export async function removeEventImages(paths: string[]) {
 }
 
 /** 캘린더 폴더의 사진을 모두 지운다 (캘린더 삭제 전에 호출) */
+/** 다른 일정이 아직 쓰고 있지 않은 사진만 지운다 (떨어진 날짜로 만든 전체 일정들은 같은 사진을 함께 쓴다) */
+export async function removeUnusedEventImages(paths: string[]) {
+  if (!paths.length) return;
+  const { data } = await supabase.from('events').select('image_paths').overlaps('image_paths', paths);
+  const used = new Set(((data ?? []) as { image_paths: string[] | null }[]).flatMap((r) => r.image_paths ?? []));
+  const unused = paths.filter((p) => !used.has(p));
+  if (unused.length) await removeEventImages(unused);
+}
+
 export async function removeCalendarImages(calendarId: string) {
   const { data } = await supabase.storage.from(BUCKET).list(calendarId, { limit: 1000 });
   const paths = (data ?? []).map((f: { name: string }) => `${calendarId}/${f.name}`);
