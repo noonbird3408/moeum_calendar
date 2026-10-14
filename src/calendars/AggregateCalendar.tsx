@@ -112,7 +112,7 @@ export function AggregateCalendar({ calendars, side }: { calendars: CalLite[]; s
   const adminOf = (id: string) => calMap.get(id)?.admin ?? false;
 
   const createEvent = async (input: EventInput, ids: string[]) => {
-    const rows = await createEventsIn(ids, input, userId);
+    const rows = await createEventsIn(ids, input, userId, true);
     await loadRef.current();
     return rows;
   };

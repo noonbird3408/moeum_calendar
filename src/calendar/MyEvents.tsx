@@ -107,7 +107,7 @@ export function MyEventsSheet({
   open: boolean;
   canManage?: (e: CalendarEvent) => boolean; // 수정·삭제 가능 여부 (전체 일정은 관리자만)
   rows: CalendarEvent[] | null;
-  calendarName?: (calendarId: string) => string; // 메인 화면처럼 여러 캘린더를 함께 보여줄 때
+  calendarName?: (e: CalendarEvent) => string; // 메인 화면처럼 여러 캘린더를 함께 보여줄 때
   onClose: () => void;
   onOpen: (e: CalendarEvent) => void;
   onEdit: (e: CalendarEvent) => void;
@@ -179,7 +179,7 @@ export function MyEventsSheet({
           {e.repeat_weekdays && <span className="badge badge-recur">↻ 정기</span>} {e.title}
         </span>
         <span className="my-sub">
-          {calendarName && <span className="mine-cal">{calendarName(e.calendar_id)} · </span>}
+          {calendarName && <span className="mine-cal">{calendarName(e)} · </span>}
           {scheduleText(e)}
         </span>
       </button>

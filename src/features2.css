@@ -2156,3 +2156,18 @@
   opacity: 0.35;
   cursor: not-allowed;
 }
+/* 메인 '전체 일정' 목록 */
+.group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.group-dday {
+  flex: 0 0 auto;
+  align-self: center;
+  min-width: 3.4rem;
+  text-align: center;
+}

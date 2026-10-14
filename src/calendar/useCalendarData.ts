@@ -151,9 +151,19 @@ export function useCalendarMeta(calendarId: string, myId: string, onRemoved: () 
   return { calendar, members, status, isAdmin, profiles, reload: load, ...actions };
 }
 
-/** 여러 캘린더에 같은 일정을 한 번에 추가한다 (캘린더마다 한 행씩, RLS 가 권한을 최종 확인) */
-export async function createEventsIn(calendarIds: string[], input: EventInput, myId: string): Promise<CalendarEvent[]> {
-  const rows = calendarIds.map((calendar_id) => ({ ...input, calendar_id, author_id: myId }));
+const newUuid = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      });
+
+/** 여러 캘린더에 같은 일정을 한 번에 추가한다 (캘린더마다 한 행씩, RLS 가 권한을 최종 확인)
+ *  sync: 메인 화면에서 쓴 일정 — 복사본끼리 같은 sync_id 를 달아, 새로 들어간 캘린더에도 복사되고 수정·삭제가 함께 반영된다 (DB 트리거) */
+export async function createEventsIn(calendarIds: string[], input: EventInput, myId: string, sync = false): Promise<CalendarEvent[]> {
+  const sync_id = sync && !input.is_group ? newUuid() : null;
+  const rows = calendarIds.map((calendar_id) => ({ ...input, calendar_id, author_id: myId, ...(sync_id ? { sync_id } : {}) }));
   const { data, error } = await supabase.from('events').insert(rows).select();
   if (error) throw error;
   return (data ?? []) as CalendarEvent[];

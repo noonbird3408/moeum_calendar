@@ -43,6 +43,7 @@ export type CalendarEvent = {
   link_url: string | null;
   image_paths?: string[]; // 전체 일정 사진 (event-images 버킷 경로)
   max_participants?: number | null; // 참여 정원 (전체 일정)
+  sync_id?: string | null; // 메인에서 쓴 개인 일정: 캘린더마다 복사된 같은 일정끼리 같은 값
   created_at: string;
   updated_at: string;
   /** 화면에 펼쳐 놓은 회차의 날짜 (반복 일정을 날짜마다 펼칠 때만 채움) */
