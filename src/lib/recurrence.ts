@@ -26,3 +26,17 @@ export function expandEvents(events: CalendarEvent[], from: string, to: string):
 
 /** 요일 목록 → '월·수' */
 export const weekdaysText = (days: number[]) => [...days].sort((a, b) => a - b).map((d) => WEEKDAYS[d]).join('·');
+
+type RepeatLike = { start_date: string; repeat_weekdays: number[] | null; repeat_until: string | null; excluded_dates?: string[] };
+
+/** 반복 일정의 d 날짜가 실제 회차인지 (제외한 날짜는 아님) */
+export const isOccurrence = (e: RepeatLike, d: string) =>
+  !!e.repeat_weekdays && !!e.repeat_until && e.start_date <= d && d <= e.repeat_until && e.repeat_weekdays.includes(weekday(d)) && !(e.excluded_dates ?? []).includes(d);
+
+/** from 이후(포함) 첫 회차. 없으면 null */
+export function nextOccurrence(e: RepeatLike, from: string): string | null {
+  if (!e.repeat_weekdays || !e.repeat_until) return null;
+  let d = e.start_date > from ? e.start_date : from;
+  for (let n = 0; d <= e.repeat_until && n < 800; n++, d = addDays(d, 1)) if (isOccurrence(e, d)) return d;
+  return null;
+}

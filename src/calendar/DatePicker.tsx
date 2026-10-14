@@ -1,5 +1,6 @@
 // 일정 날짜 고르기: 날짜를 하나씩 눌러 켜고 끄기 · 누른 채로 끌어서 여러 날 한 번에 · 한 날짜를 누른 채(또는 방금 누른 뒤) 다른 날짜를 우클릭하면 그 사이 전체 선택
 // (Shift+클릭도 사이 전체 선택). 모바일에서는 손가락으로 끌어서 고른다.
+// 요일 반복일 때는 회차 날짜가 체크(옅은 칠)되어 보이고, 회차를 우클릭하거나 꾹 누르면 그 날만 체크가 풀린다(예외). 다시 하면 되살아난다.
 import { useEffect, useRef, useState, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent } from 'react';
 import { addDays, addMonths, diffDays, fmtMD, isSameMonth, monthGrid, parseYmd, startOfMonth, todayYmd, weekLabels, weekday } from '@/lib/dates';
 import { usePrefs } from '@/lib/prefs';
@@ -34,7 +35,7 @@ export function toRuns(dates: Iterable<string>): [string, string][] {
 }
 
 export function runsText(dates: Set<string>): string {
-  if (!dates.size) return '날짜를 고르세요';
+  if (!dates.size) return '';
   const runs = toRuns(dates);
   const parts = runs.map(([s, e]) => (s === e ? fmtMD(s) : `${fmtMD(s)} ~ ${fmtMD(e)}`));
   const shown = parts.length > 3 ? [...parts.slice(0, 3), `외 ${parts.length - 3}구간`] : parts;
@@ -57,10 +58,18 @@ export function DatePicker({
   const today = todayYmd();
   // 끌기 상태: 시작 날짜, 켜기/끄기, 시작 전 선택
   const drag = useRef<{ anchor: string; add: boolean; base: Set<string> } | null>(null);
-  const longPress = useRef<{ date: string; pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const longPress = useRef<{ date: string; pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout>; base?: Set<string> } | null>(null);
   const anchor = useRef<string | null>(first ?? null); // 우클릭·Shift 범위의 기준
   const selRef = useRef(selected);
   selRef.current = selected;
+  // 꾹 누르기와 그 뒤에 따라오는 contextmenu 가 같은 날을 두 번 뒤집지 않게
+  const lastEx = useRef<{ date: string; at: number } | null>(null);
+  const toggleEx = (d: string) => {
+    const now = Date.now();
+    if (lastEx.current && lastEx.current.date === d && now - lastEx.current.at < 800) return;
+    lastEx.current = { date: d, at: now };
+    onToggleException?.(d);
+  };
 
   useEffect(() => {
     const end = () => {
@@ -101,7 +110,7 @@ export function DatePicker({
         timer: setTimeout(() => {
           if (longPress.current !== pending) return;
           longPress.current = null;
-          onToggleException(d);
+          toggleEx(d);
         }, 550),
       };
       longPress.current = pending;
@@ -112,10 +121,29 @@ export function DatePicker({
       return;
     }
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); // 다른 칸 위로 끌 수 있게
+    const before = new Set(selRef.current);
     const add = !selRef.current.has(d);
-    drag.current = { anchor: d, add, base: new Set(selRef.current) };
+    drag.current = { anchor: d, add, base: before };
     anchor.current = d;
     apply(selRef.current, [d], add);
+    // 마우스로 회차를 꾹 누르면: 방금 바꾼 선택을 되돌리고 그 날을 반복에서 뺀다
+    if (highlightWeekdays?.length && onToggleException && isOccurrenceDate?.(d)) {
+      const pending = {
+        date: d,
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        base: before,
+        timer: setTimeout(() => {
+          if (longPress.current !== pending) return;
+          longPress.current = null;
+          drag.current = null;
+          onChange(before);
+          toggleEx(d);
+        }, 550),
+      };
+      longPress.current = pending;
+    }
   };
 
   const onMove = (e: RPointerEvent<HTMLDivElement>) => {
@@ -123,9 +151,12 @@ export function DatePicker({
     if (pending && pending.pointerId === e.pointerId && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 10) {
       clearTimeout(pending.timer);
       longPress.current = null;
-      const add = !selRef.current.has(pending.date);
-      drag.current = { anchor: pending.date, add, base: new Set(selRef.current) };
-      anchor.current = pending.date;
+      if (!pending.base) {
+        // 터치: 꾹 누르기 대기 중에 움직이면 끌어서 고르기 시작
+        const add = !selRef.current.has(pending.date);
+        drag.current = { anchor: pending.date, add, base: new Set(selRef.current) };
+        anchor.current = pending.date;
+      }
     }
     const g = drag.current;
     if (!g) return;
@@ -138,7 +169,7 @@ export function DatePicker({
     if (!pending || pending.pointerId !== e.pointerId) return;
     clearTimeout(pending.timer);
     longPress.current = null;
-    if (drag.current) return;
+    if (pending.base || drag.current) return; // 마우스는 누를 때 이미 골랐다
     anchor.current = d;
     apply(selRef.current, [d], !selRef.current.has(d));
   };
@@ -146,7 +177,7 @@ export function DatePicker({
   const onContext = (e: RMouseEvent, d: string) => {
     e.preventDefault();
     if (highlightWeekdays?.length && onToggleException) {
-      if (isOccurrenceDate?.(d)) onToggleException(d);
+      if (isOccurrenceDate?.(d)) toggleEx(d);
       return;
     }
     const from = drag.current?.anchor ?? anchor.current;
@@ -177,13 +208,15 @@ export function DatePicker({
         {days.map((d) => {
           const on = selected.has(d);
           const excluded = excludedDates.includes(d);
+          const occ = !!highlightWeekdays?.length && !!isOccurrenceDate?.(d);
           const dow = weekday(d);
           const cls = [
             'range-day',
             isSameMonth(d, month) ? '' : 'out',
             d === today ? 'today' : '',
             on ? 'picked' : '',
-            excluded ? 'exception' : '',
+            occ && !excluded ? 'occ' : '',
+            occ && excluded ? 'exception' : '',
             on && selected.has(addDays(d, -1)) ? 'join-l' : '',
             on && selected.has(addDays(d, 1)) ? 'join-r' : '',
             highlightWeekdays?.includes(dow) ? 'wd-hl' : '',
@@ -195,7 +228,8 @@ export function DatePicker({
               type="button"
               data-day={d}
               className={cls}
-              aria-label={`${fmtMD(d)}${excluded ? ' 반복 제외' : ''}`}
+              aria-label={`${fmtMD(d)}${occ ? (excluded ? ' 반복 제외됨' : ' 반복 회차') : ''}`}
+              title={occ ? (excluded ? '우클릭·꾹 누르기: 다시 포함' : '우클릭·꾹 누르기: 이 날만 제외') : undefined}
               aria-pressed={on}
               onPointerDown={(e) => onDown(e, d)}
               onPointerUp={(e) => onUp(e, d)}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { CalendarEvent, EventInput, Profile } from '@/types';
-import { addDays, diffDays, fmtMD, minToTime, toMin, todayYmd, weekday, WEEKDAYS } from '@/lib/dates';
+import { addDays, diffDays, fmtMD, fmtMDFrom, minToTime, toMin, todayYmd, weekday, WEEKDAYS } from '@/lib/dates';
 import { checkImageFile, MAX_IMAGES, removeEventImages, signedUrls, uploadEventImage } from '@/lib/eventImages';
 import { errorMessage } from '@/lib/supabase';
 import { findUrls, normalizeUrl } from '@/lib/links';
@@ -33,6 +33,7 @@ const ENDS = Array.from({ length: 48 }, (_, i) => minToTime((i + 1) * 30)); // 0
 const MAX_DAYS = 62; // 한 번에 고를 수 있는 날짜 수
 const MAX_REPEAT_SPAN = 400; // 요일 반복 기간 최대(일)
 const REPEAT_DEFAULT_DAYS = 364; // 요일만 고르고 기간을 안 정하면 시작일부터 1년
+const MAX_TIMES = 5; // 같은 날에 넣을 수 있는 시간대 수
 
 const snap = (t: string | null, fallback: string) => {
   if (!t) return fallback;
@@ -43,13 +44,17 @@ const snap = (t: string | null, fallback: string) => {
 /** 수정할 일정의 날짜를 선택 집합으로: 반복 일정은 기간 양 끝, 아니면 기간의 모든 날 */
 function initialDates(e: CalendarEvent | undefined, base: string): Set<string> {
   if (!e) return new Set([base]);
-  if (e.repeat_weekdays && e.repeat_until) return new Set([e.start_date, e.repeat_until]);
+  if (e.repeat_weekdays && e.repeat_until) {
+    // 기간을 따로 안 정한 반복(기본 1년)은 시작일만 보여 준다
+    return diffDays(e.start_date, e.repeat_until) === REPEAT_DEFAULT_DAYS ? new Set([e.start_date]) : new Set([e.start_date, e.repeat_until]);
+  }
   const out = new Set<string>();
   for (let d = e.start_date, n = diffDays(e.start_date, e.end_date); n >= 0 && out.size < MAX_DAYS; n--, d = addDays(d, 1)) out.add(d);
   return out;
 }
 
 type Slot = { start: string; end: string };
+type TimeRange = { start: string; end: string };
 type NewImage = { file: File; url: string };
 
 export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, members, allowGroup = true, onClose, onCreate, onUpdate }: Props) {
@@ -64,12 +69,23 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
   const [title, setTitle] = useState(editing?.title ?? '');
   const [text, setText] = useState(editing?.memo ?? ''); // 개인: 메모 · 전체: 설명(본문)
   const [dates, setDates] = useState<Set<string>>(() => initialDates(editing, baseDate));
+  // 날짜를 직접 눌렀는지: 날짜 칸이 아닌 '일정 추가' 버튼으로 열면 오늘이 기본값으로 들어가 있다
+  const [datesTouched, setDatesTouched] = useState(!!editing || !!target?.date);
   const [dateOpen, setDateOpen] = useState(false); // '날짜' 버튼을 누르면 요일·달력이 펼쳐진다
   const [weekdays, setWeekdays] = useState<number[]>(editing?.repeat_weekdays ?? []);
   const [excludedDates, setExcludedDates] = useState<string[]>(editing?.excluded_dates ?? []);
   const [allDay, setAllDay] = useState(editing ? !editing.start_time : true);
-  const [startTime, setStartTime] = useState(snap(editing?.start_time ?? null, '19:00'));
-  const [endTime, setEndTime] = useState(snap(editing?.end_time ?? null, '21:00'));
+  // 시간대 목록: 첫 칸이 기본, '+' 로 같은 날짜에 다른 시간을 더 넣는다 (시간대마다 일정이 하나씩 생긴다)
+  const [times, setTimes] = useState<TimeRange[]>(() => [{ start: snap(editing?.start_time ?? null, '19:00'), end: snap(editing?.end_time ?? null, '21:00') }]);
+  const setTime = (i: number, key: 'start' | 'end', v: string) => setTimes((l) => l.map((t, j) => (j === i ? { ...t, [key]: v } : t)));
+  const addTime = () =>
+    setTimes((l) => {
+      if (l.length >= MAX_TIMES) return l;
+      const last = l[l.length - 1];
+      const s0 = Math.min(toMin(last.end), 1410);
+      return [...l, { start: minToTime(s0), end: minToTime(Math.min(s0 + 60, 1440)) }];
+    });
+  const removeTime = (i: number) => setTimes((l) => l.filter((_, j) => j !== i));
   // 전체 일정: 참여 멤버 · 정원 · 사진
   const [participants, setParticipants] = useState<string[]>([]);
   const [initialParticipants, setInitialParticipants] = useState<string[]>([]);
@@ -83,7 +99,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
   const [tried, setTried] = useState(false);
 
   const isGroup = kind === 'group';
-  const weekly = !isGroup && weekdays.length > 0;
+  const weekly = weekdays.length > 0;
   const groupOkNow = groupOk(pickedCals);
   const single = pickedCals.length === 1 ? pickedCals[0] : null;
   const isAdminHere = !!single && adminOf(single);
@@ -91,7 +107,9 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
   const canImages = isGroup && isAdminHere;
   const url = useMemo(() => (isGroup && text.trim() ? normalizeUrl(findUrls(text)[0] ?? '') : null), [isGroup, text]);
   const nameOf = (id: string) => members?.find((m) => m.id === id)?.nickname ?? '(알 수 없음)';
-  const sorted = useMemo(() => [...dates].sort(), [dates]);
+  // 요일 반복에서 날짜를 안 건드렸으면 기본 오늘을 '고른 날짜'로 보이지 않게 한다 (시작일로만 쓴다)
+  const shownDates = useMemo(() => (weekly && !datesTouched ? new Set<string>() : dates), [weekly, datesTouched, dates]);
+  const sorted = useMemo(() => [...shownDates].sort(), [shownDates]);
   const runs = useMemo(() => toRuns(dates), [dates]);
 
   // 저장할 일정들의 날짜 구간
@@ -125,22 +143,27 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
   // 새로 고른 사진의 미리보기 URL 은 닫을 때 정리
   useEffect(() => () => newImages.forEach((n) => URL.revokeObjectURL(n.url)), []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isOcc = (date: string) => !!slots[0] && slots[0].start <= date && date <= slots[0].end && weekdays.includes(weekday(date));
+  const activeTimes = allDay ? [] : times;
+
   const errors = useMemo(() => {
     const e: string[] = [];
     if (!title.trim()) e.push('제목을 입력해 주세요.');
     if (!pickedCals.length) e.push('캘린더를 하나 이상 고르세요.');
     if (isGroup && !groupOkNow) e.push('전체 일정은 선택한 캘린더의 관리자만 만들 수 있어요.');
     if (!weekly && !dates.size) e.push('날짜를 골라 주세요.');
-    if (isGroup && runs.length > 1) e.push('전체 일정은 이어진 날짜 한 구간만 고를 수 있어요.');
+    if (isGroup && !weekly && runs.length > 1) e.push('전체 일정은 이어진 날짜 한 구간만 고를 수 있어요.');
     if (weekly && slots[0] && diffDays(slots[0].start, slots[0].end) > MAX_REPEAT_SPAN) e.push(`반복 기간은 최대 ${MAX_REPEAT_SPAN + 1}일이에요.`);
-    if (!weekly && slots.length > MAX_DAYS) e.push(`한 번에 ${MAX_DAYS}개까지 만들 수 있어요.`);
+    if (slots.length * Math.max(activeTimes.length, 1) > MAX_DAYS) e.push(`한 번에 ${MAX_DAYS}개까지 만들 수 있어요.`);
     const sameDay = weekly || !isGroup || slots.every((s) => s.start === s.end);
-    if (!allDay && sameDay && toMin(endTime) <= toMin(startTime)) e.push('종료 시간이 시작 시간보다 늦어야 해요.');
+    if (sameDay && activeTimes.some((t) => toMin(t.end) <= toMin(t.start))) e.push('종료 시간이 시작 시간보다 늦어야 해요.');
+    const ordered = [...activeTimes].sort((a, b) => toMin(a.start) - toMin(b.start));
+    if (ordered.some((t, i) => i > 0 && toMin(t.start) < toMin(ordered[i - 1].end))) e.push('시간대끼리 겹치지 않게 골라 주세요.');
     const mp = maxPeople.trim();
     if (isGroup && mp && !(/^\d+$/.test(mp) && +mp >= 1 && +mp <= 1000)) e.push('참여 정원은 1~1000 사이 숫자로 적어 주세요.');
     if (isGroup && mp && participants.length > +mp) e.push('지정한 참여 멤버가 정원보다 많아요.');
     return e;
-  }, [title, pickedCals, isGroup, groupOkNow, weekly, dates, runs, slots, allDay, startTime, endTime, maxPeople, participants]);
+  }, [title, pickedCals, isGroup, groupOkNow, weekly, dates, runs, slots, activeTimes, maxPeople, participants]);
 
   const toggleCal = (id: string) =>
     setPickedCals((list) => {
@@ -155,7 +178,6 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
 
   const chooseKind = (k: 'personal' | 'group') => {
     setKind(k);
-    if (k === 'group') setWeekdays([]);
     if (k === 'personal') setParticipants([]);
   };
 
@@ -194,14 +216,19 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
       memo: (isGroup ? text.trim() : text.trim().slice(0, 500)) || null,
       is_group: isGroup,
       is_recurring: weekly,
-      start_time: allDay ? null : startTime,
-      end_time: allDay ? null : endTime,
       repeat_weekdays: weekly ? [...weekdays].sort((a, b) => a - b) : null,
       link_url: url,
-      excluded_dates: weekly ? excludedDates : [],
+      // 기간·요일 밖으로 밀려난 제외 날짜는 버린다
+      excluded_dates: weekly ? excludedDates.filter(isOcc) : [],
       max_participants: isGroup && maxPeople.trim() ? Number(maxPeople) : null,
     };
-    const inputs: EventInput[] = slots.map((s) => ({ ...base, start_date: s.start, end_date: s.end, repeat_until: weekly ? s.end : null }));
+    // 시간대가 여러 개면 날짜 구간 × 시간대마다 일정을 하나씩 만든다 (수정 중인 일정은 첫 시간대로 바뀐다)
+    const timeList: { start_time: string | null; end_time: string | null }[] = allDay
+      ? [{ start_time: null, end_time: null }]
+      : times.map((t) => ({ start_time: t.start, end_time: t.end }));
+    const inputs: EventInput[] = timeList.flatMap((t) =>
+      slots.map((s) => ({ ...base, ...t, start_date: s.start, end_date: s.end, repeat_until: weekly ? s.end : null })),
+    );
 
     setBusy(true);
     const uploaded: string[] = [];
@@ -210,7 +237,22 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
       if (canAssign && participants.length && single) {
         const found: Conflict[] = [];
         for (const inp of inputs) {
-          found.push(...(await findConflicts(single, participants, { start_date: inp.start_date, end_date: inp.end_date, start_time: inp.start_time, end_time: inp.end_time }, nameOf)));
+          found.push(
+            ...(await findConflicts(
+              single,
+              participants,
+              {
+                start_date: inp.start_date,
+                end_date: inp.end_date,
+                start_time: inp.start_time,
+                end_time: inp.end_time,
+                repeat_weekdays: inp.repeat_weekdays,
+                repeat_until: inp.repeat_until,
+                excluded_dates: inp.excluded_dates,
+              },
+              nameOf,
+            )),
+          );
         }
         if (found.length) {
           setConflicts(found);
@@ -252,12 +294,14 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
     }
   };
 
-  const pickedDateText = toRuns(dates)
-    .map(([s, e]) => (s === e ? fmtMD(s) : `${fmtMD(s)} ~ ${fmtMD(e)}`))
-    .join(', ');
-  const dateSummary = weekly
-    ? `${pickedDateText ? `${pickedDateText} · ` : ''}매주 ${weekdays.map((d) => WEEKDAYS[d]).join('·')}`
-    : runsText(dates);
+  // 요일 반복: '매주 월·수 · 10/14부터' / '매주 월·수 · 10/14 ~ 12/31' (해가 바뀌면 '27년 1/5')
+  const repeatRange = (() => {
+    const s0 = slots[0];
+    if (!s0) return '';
+    if (sorted.length < 2) return `${datesTouched ? fmtMD(s0.start) : '오늘'}부터`;
+    return `${fmtMD(s0.start)} ~ ${fmtMDFrom(s0.end, s0.start)}`;
+  })();
+  const dateSummary = weekly ? `매주 ${weekdays.map((d) => WEEKDAYS[d]).join('·')} · ${repeatRange}` : runsText(dates);
   const imageCount = keptImages.length + newImages.length;
 
   return (
@@ -324,31 +368,26 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
           </button>
           {dateOpen && (
             <div className="date-panel">
-              {!isGroup && (
-                <div className="weekday-row" role="group" aria-label="반복 요일">
-                  {WEEKDAYS.map((w, i) => {
-                    const on = weekdays.includes(i);
-                    return (
-                      <button key={w} type="button" className={`wd-btn ${on ? 'on' : ''} ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}`} aria-pressed={on} onClick={() => toggleWeekday(i)}>
-                        {w}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="weekday-row" role="group" aria-label="반복 요일">
+                {WEEKDAYS.map((w, i) => {
+                  const on = weekdays.includes(i);
+                  return (
+                    <button key={w} type="button" className={`wd-btn ${on ? 'on' : ''} ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}`} aria-pressed={on} onClick={() => toggleWeekday(i)}>
+                      {w}
+                    </button>
+                  );
+                })}
+              </div>
               <DatePicker
-                selected={dates}
+                selected={shownDates}
                 maxDays={weekly ? MAX_REPEAT_SPAN : MAX_DAYS}
                 highlightWeekdays={weekly ? weekdays : undefined}
                 excludedDates={weekly ? excludedDates : undefined}
                 onToggleException={weekly ? toggleOccurrenceException : undefined}
-                isOccurrenceDate={
-                  weekly && slots[0]
-                    ? (date) => slots[0].start <= date && date <= slots[0].end && weekdays.includes(weekday(date))
-                    : undefined
-                }
+                isOccurrenceDate={weekly && slots[0] ? isOcc : undefined}
                 onChange={(next) => {
                   setDates(next);
+                  setDatesTouched(true);
                   setConflicts([]);
                 }}
               />
@@ -358,24 +397,44 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
 
         <div className="field">
           <span className="field-label">시간</span>
-          <div className="time-row">
-            <select className="input" value={startTime} disabled={allDay} aria-label="시작 시간" onChange={(e) => setStartTime(e.target.value)}>
-              {STARTS.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-            <span className="muted">~</span>
-            <select className="input" value={endTime} disabled={allDay} aria-label="종료 시간" onChange={(e) => setEndTime(e.target.value)}>
-              {ENDS.map((t) => (
-                <option key={t} disabled={toMin(t) <= toMin(startTime) && (weekly || !isGroup || runs.every(([s, e]) => s === e))}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <button type="button" className={`chip-pick allday-chip ${allDay ? 'on' : ''}`} aria-pressed={allDay} onClick={() => setAllDay((v) => !v)}>
-              하루종일
-            </button>
-          </div>
+          {(allDay ? times.slice(0, 1) : times).map((t, i) => (
+            <div className="time-row" key={i}>
+              <select className="input" value={t.start} disabled={allDay} aria-label={`시작 시간${i ? ` ${i + 1}` : ''}`} onChange={(e) => setTime(i, 'start', e.target.value)}>
+                {STARTS.map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </select>
+              <span className="muted">~</span>
+              <select className="input" value={t.end} disabled={allDay} aria-label={`종료 시간${i ? ` ${i + 1}` : ''}`} onChange={(e) => setTime(i, 'end', e.target.value)}>
+                {ENDS.map((v) => (
+                  <option key={v} disabled={toMin(v) <= toMin(t.start) && (weekly || !isGroup || runs.every(([s, e]) => s === e))}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+              {i === 0 ? (
+                <>
+                  <button
+                    type="button"
+                    className="icon-btn time-add"
+                    aria-label="같은 날짜에 다른 시간 추가"
+                    title="같은 날짜에 다른 시간 추가"
+                    disabled={allDay || times.length >= MAX_TIMES}
+                    onClick={addTime}
+                  >
+                    <Icon name="plus" size={18} />
+                  </button>
+                  <button type="button" className={`chip-pick allday-chip ${allDay ? 'on' : ''}`} aria-pressed={allDay} onClick={() => setAllDay((v) => !v)}>
+                    하루종일
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="icon-btn time-remove" aria-label={`시간 ${i + 1} 빼기`} onClick={() => removeTime(i)}>
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
         </div>
 
         {isGroup ? (

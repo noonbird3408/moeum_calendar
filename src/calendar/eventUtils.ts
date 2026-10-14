@@ -1,5 +1,5 @@
 import type { CalendarEvent, Profile } from '@/types';
-import { fmtMD, fmtTime } from '@/lib/dates';
+import { fmtMD, fmtMDFrom, fmtTime } from '@/lib/dates';
 import { weekdaysText } from '@/lib/recurrence';
 
 /** 셀 안 정렬: ① 단체 → 개인 ② 종일 → 시간 일정 ③ 시작 시간 ④ 등록 순 */
@@ -44,7 +44,8 @@ export const nicknameOf = (profiles: Map<string, Profile>, id: string) => profil
 export function scheduleText(e: CalendarEvent) {
   if (e.repeat_weekdays && e.repeat_until) {
     const time = e.start_time ? ` ${fmtTime(e.start_time)}~${fmtTime(e.end_time)}` : ' 하루종일';
-    return `매주 ${weekdaysText(e.repeat_weekdays)}${time} · ${fmtMD(e.series_start_date ?? e.start_date)} ~ ${fmtMD(e.repeat_until)}`;
+    const first = e.series_start_date ?? e.start_date;
+    return `매주 ${weekdaysText(e.repeat_weekdays)}${time} · ${fmtMD(first)} ~ ${fmtMDFrom(e.repeat_until, first)}`;
   }
   return periodText(e);
 }

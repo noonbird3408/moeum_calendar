@@ -1,10 +1,19 @@
 // 단체 일정 참여 멤버 지정: 충돌 검사 · 참여 명단 동기화
 import { addDays, diffDays, toMin } from '@/lib/dates';
-import { expandEvents } from '@/lib/recurrence';
+import { expandEvents, isOccurrence } from '@/lib/recurrence';
 import { supabase } from '@/lib/supabase';
 import type { CalendarEvent } from '@/types';
 
-export type Slot = { start_date: string; end_date: string; start_time: string | null; end_time: string | null };
+export type Slot = {
+  start_date: string;
+  end_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  // 요일 반복 전체 일정이면 회차 날짜만 본다
+  repeat_weekdays?: number[] | null;
+  repeat_until?: string | null;
+  excluded_dates?: string[];
+};
 export type Conflict = { userId: string; title: string; date: string; time: string };
 
 /** 하루 안에서 일정이 차지하는 구간(분). 여러 날 시간 일정은 첫날 시작~24시, 마지막 날 0시~종료 (availability 와 같은 규칙) */
@@ -31,8 +40,11 @@ export async function findConflicts(calendarId: string, userIds: string[], cand:
     const from = e.start_date > cand.start_date ? e.start_date : cand.start_date;
     const to = e.end_date < cand.end_date ? e.end_date : cand.end_date;
     if (from > to) continue;
+    const weekly = !!cand.repeat_weekdays?.length && !!cand.repeat_until;
     for (let d = from, n = diffDays(from, to); n >= 0; n--, d = addDays(d, 1)) {
-      const [cs, ce] = dayWindow(d, cand);
+      if (weekly && !isOccurrence({ start_date: cand.start_date, repeat_weekdays: cand.repeat_weekdays!, repeat_until: cand.repeat_until!, excluded_dates: cand.excluded_dates }, d)) continue;
+      // 반복 회차는 하루짜리라 그날 시작~종료 시간 그대로
+      const [cs, ce] = weekly ? dayWindow(d, { ...cand, start_date: d, end_date: d }) : dayWindow(d, cand);
       const [es, ee] = dayWindow(d, e);
       if (Math.max(cs, es) < Math.min(ce, ee)) {
         out.push({ userId: e.author_id, title: e.title, date: d, time: e.start_time ? `${e.start_time.slice(0, 5)}~${(e.end_time ?? '').slice(0, 5)}` : '하루종일' });

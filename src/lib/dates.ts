@@ -54,6 +54,8 @@ export const daysOfMonth = (month: Date) => monthGrid(month).filter((d) => isSam
 
 export const fmtMonthTitle = (d: Date) => `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
 export const fmtMD = (s: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
+/** 기준 날짜와 해가 다르면 연도를 붙인다: '10/13' 또는 '27년 10/13' */
+export const fmtMDFrom = (s: string, ref: string) => (s.slice(0, 4) === ref.slice(0, 4) ? fmtMD(s) : `${s.slice(2, 4)}년 ${fmtMD(s)}`);
 export const fmtMDW = (s: string) => `${fmtMD(s)} (${WEEKDAYS[weekday(s)]})`;
 export const fmtDayTitle = (s: string) =>
   `${Number(s.slice(5, 7))}월 ${Number(s.slice(8, 10))}일 (${WEEKDAYS[weekday(s)]})`;

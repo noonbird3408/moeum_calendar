@@ -5,6 +5,7 @@ import { diffDays, fmtMD, todayYmd, WEEKDAYS, weekday } from '@/lib/dates';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from '@/lib/router';
 import { textOn } from '@/lib/colors';
+import { nextOccurrence } from '@/lib/recurrence';
 
 export type CalLite = { id: string; name: string; group_color: string };
 
@@ -46,7 +47,17 @@ export function UpcomingGroups({
         .gte('end_date', todayYmd())
         .order('start_date')
         .limit(limit);
-      if (alive) setRows((data ?? []) as CalendarEvent[]);
+      // 요일 반복 전체 일정은 다음 회차 날짜로 바꿔서 보여 준다
+      const today = todayYmd();
+      const list = ((data ?? []) as CalendarEvent[])
+        .map((e) => {
+          if (!e.repeat_weekdays || !e.repeat_until) return e;
+          const next = nextOccurrence(e, today);
+          return next ? { ...e, occ: next, series_start_date: e.start_date, start_date: next, end_date: next } : null;
+        })
+        .filter((e): e is CalendarEvent => !!e)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date) || (a.start_time ?? '').localeCompare(b.start_time ?? ''));
+      if (alive) setRows(list);
     };
     load();
     const ch = supabase
@@ -75,7 +86,7 @@ export function UpcomingGroups({
             const color = cal?.group_color ?? '#FF6B35';
             const multi = e.end_date !== e.start_date;
             return (
-              <li key={e.id}>
+              <li key={`${e.id}-${e.start_date}`}>
                 <button type="button" className="up-card" onClick={() => navigate(`/c/${e.calendar_id}?date=${e.start_date}`)}>
                   <span className="up-top">
                     <span className="up-dday" style={{ background: color, color: textOn(color) }}>

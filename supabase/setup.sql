@@ -379,6 +379,7 @@ grant update (nickname, color, avatar_url, recent_colors) on public.profiles to 
 -- ---------------------------------------------------------------------
 -- events : 반복 요일, 반복 종료일, 링크, 리치 본문
 --   · 반복 일정(repeat_weekdays 있음): start_date = 첫 날, end_date = repeat_until, 하루짜리 회차가 요일마다 생긴다
+--     개인 일정과 전체(단체) 일정 모두 요일 반복을 쓸 수 있다
 --   · 단체 일정은 반복하지 않는다
 -- ---------------------------------------------------------------------
 alter table public.events add column if not exists repeat_weekdays smallint[];
@@ -394,8 +395,7 @@ alter table public.events drop constraint if exists events_repeat_rule;
 alter table public.events add constraint events_repeat_rule check (
   repeat_weekdays is null
   or (
-    not is_group
-    and repeat_until is not null
+    repeat_until is not null
     and repeat_until >= start_date
     and cardinality(repeat_weekdays) between 1 and 7
     and repeat_weekdays <@ array[0,1,2,3,4,5,6]::smallint[]
@@ -407,7 +407,7 @@ alter table public.events add constraint events_link_len check (link_url is null
 
 revoke update on public.events from anon, authenticated;
 grant update (title, memo, is_group, is_recurring, start_date, end_date, start_time, end_time,
-              repeat_weekdays, repeat_until, link_url, body_rich)
+              repeat_weekdays, repeat_until, excluded_dates, link_url, body_rich)
   on public.events to authenticated;
 
 -- ---------------------------------------------------------------------
@@ -727,7 +727,7 @@ alter table public.events add constraint events_group_only_extras
 
 revoke update on public.events from anon, authenticated;
 grant update (title, memo, is_group, is_recurring, start_date, end_date, start_time, end_time,
-              repeat_weekdays, repeat_until, link_url, body_rich, image_paths, max_participants)
+              repeat_weekdays, repeat_until, excluded_dates, link_url, body_rich, image_paths, max_participants)
   on public.events to authenticated;
 
 -- 정원이 찬 일정에는 관리자만 더 넣을 수 있다 (동시에 눌러도 넘치지 않도록 일정 행을 잠근다)

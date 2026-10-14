@@ -379,6 +379,7 @@ grant update (nickname, color, avatar_url, recent_colors) on public.profiles to 
 -- ---------------------------------------------------------------------
 -- events : 반복 요일, 반복 종료일, 링크, 리치 본문
 --   · 반복 일정(repeat_weekdays 있음): start_date = 첫 날, end_date = repeat_until, 하루짜리 회차가 요일마다 생긴다
+--     개인 일정과 전체(단체) 일정 모두 요일 반복을 쓸 수 있다
 --   · 단체 일정은 반복하지 않는다
 -- ---------------------------------------------------------------------
 alter table public.events add column if not exists repeat_weekdays smallint[];
@@ -394,8 +395,7 @@ alter table public.events drop constraint if exists events_repeat_rule;
 alter table public.events add constraint events_repeat_rule check (
   repeat_weekdays is null
   or (
-    not is_group
-    and repeat_until is not null
+    repeat_until is not null
     and repeat_until >= start_date
     and cardinality(repeat_weekdays) between 1 and 7
     and repeat_weekdays <@ array[0,1,2,3,4,5,6]::smallint[]

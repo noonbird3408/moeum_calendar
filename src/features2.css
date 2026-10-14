@@ -1712,6 +1712,7 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   position: relative;
 }
 .range-day.picked {
@@ -1727,9 +1728,47 @@
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
+/* 요일 반복: 회차는 옅게 칠해 '체크'된 것처럼, 우클릭·꾹 눌러 뺀 날은 칠 없이 취소선 */
+.range-day.occ:not(.picked) {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: 8px;
+}
 .range-day.exception {
-  outline: 2px solid var(--danger);
-  outline-offset: -2px;
+  color: var(--fg-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
+}
+.range-day.exception.picked {
+  color: var(--accent-fg);
+}
+.range-day.occ::after,
+.range-day.exception::after {
+  display: none;
+}
+/* 시간대 + / × */
+.time-add,
+.time-remove {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg);
+}
+.time-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.time-remove {
+  font-size: 1.1rem;
+  color: var(--fg-muted, var(--fg-faint));
+}
+.field .time-row + .time-row {
+  margin-top: 6px;
 }
 .range-day.wd-hl:not(.picked)::after {
   content: '';
