@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { CalendarEvent, EventInput, Profile } from '@/types';
-import { addDays, diffDays, minToTime, toMin, todayYmd, WEEKDAYS } from '@/lib/dates';
+import { addDays, diffDays, fmtMD, minToTime, toMin, todayYmd, weekday, WEEKDAYS } from '@/lib/dates';
 import { checkImageFile, MAX_IMAGES, removeEventImages, signedUrls, uploadEventImage } from '@/lib/eventImages';
 import { errorMessage } from '@/lib/supabase';
 import { findUrls, normalizeUrl } from '@/lib/links';
@@ -66,6 +66,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
   const [dates, setDates] = useState<Set<string>>(() => initialDates(editing, baseDate));
   const [dateOpen, setDateOpen] = useState(false); // '날짜' 버튼을 누르면 요일·달력이 펼쳐진다
   const [weekdays, setWeekdays] = useState<number[]>(editing?.repeat_weekdays ?? []);
+  const [excludedDates, setExcludedDates] = useState<string[]>(editing?.excluded_dates ?? []);
   const [allDay, setAllDay] = useState(editing ? !editing.start_time : true);
   const [startTime, setStartTime] = useState(snap(editing?.start_time ?? null, '19:00'));
   const [endTime, setEndTime] = useState(snap(editing?.end_time ?? null, '21:00'));
@@ -149,6 +150,8 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
     });
 
   const toggleWeekday = (d: number) => setWeekdays((list) => (list.includes(d) ? list.filter((x) => x !== d) : [...list, d].sort((a, b) => a - b)));
+  const toggleOccurrenceException = (date: string) =>
+    setExcludedDates((list) => (list.includes(date) ? list.filter((d) => d !== date) : [...list, date].sort()));
 
   const chooseKind = (k: 'personal' | 'group') => {
     setKind(k);
@@ -195,6 +198,7 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
       end_time: allDay ? null : endTime,
       repeat_weekdays: weekly ? [...weekdays].sort((a, b) => a - b) : null,
       link_url: url,
+      excluded_dates: weekly ? excludedDates : [],
       max_participants: isGroup && maxPeople.trim() ? Number(maxPeople) : null,
     };
     const inputs: EventInput[] = slots.map((s) => ({ ...base, start_date: s.start, end_date: s.end, repeat_until: weekly ? s.end : null }));
@@ -248,8 +252,11 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
     }
   };
 
+  const pickedDateText = toRuns(dates)
+    .map(([s, e]) => (s === e ? fmtMD(s) : `${fmtMD(s)} ~ ${fmtMD(e)}`))
+    .join(', ');
   const dateSummary = weekly
-    ? `${slots[0].start.slice(5).replace('-', '/')} ~ ${slots[0].end.slice(5).replace('-', '/')} · 매주 ${weekdays.map((d) => WEEKDAYS[d]).join('·')}`
+    ? `${pickedDateText ? `${pickedDateText} · ` : ''}매주 ${weekdays.map((d) => WEEKDAYS[d]).join('·')}`
     : runsText(dates);
   const imageCount = keptImages.length + newImages.length;
 
@@ -333,12 +340,18 @@ export function EventFormSheet({ target, calendars, defaultCalendarId, adminOf, 
                 selected={dates}
                 maxDays={weekly ? MAX_REPEAT_SPAN : MAX_DAYS}
                 highlightWeekdays={weekly ? weekdays : undefined}
+                excludedDates={weekly ? excludedDates : undefined}
+                onToggleException={weekly ? toggleOccurrenceException : undefined}
+                isOccurrenceDate={
+                  weekly && slots[0]
+                    ? (date) => slots[0].start <= date && date <= slots[0].end && weekdays.includes(weekday(date))
+                    : undefined
+                }
                 onChange={(next) => {
                   setDates(next);
                   setConflicts([]);
                 }}
               />
-              <p className="dp-tip">누르면 선택 · 끌면 여러 날 · 누른 채 다른 날짜 우클릭(또는 Shift+클릭)하면 사이 전체</p>
             </div>
           )}
         </div>

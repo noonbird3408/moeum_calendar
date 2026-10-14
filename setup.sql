@@ -383,6 +383,7 @@ grant update (nickname, color, avatar_url, recent_colors) on public.profiles to 
 -- ---------------------------------------------------------------------
 alter table public.events add column if not exists repeat_weekdays smallint[];
 alter table public.events add column if not exists repeat_until date;
+alter table public.events add column if not exists excluded_dates date[] not null default '{}';
 alter table public.events add column if not exists link_url text;
 alter table public.events add column if not exists body_rich jsonb;
 
@@ -406,7 +407,7 @@ alter table public.events add constraint events_link_len check (link_url is null
 
 revoke update on public.events from anon, authenticated;
 grant update (title, memo, is_group, is_recurring, start_date, end_date, start_time, end_time,
-              repeat_weekdays, repeat_until, link_url, body_rich)
+              repeat_weekdays, repeat_until, excluded_dates, link_url, body_rich)
   on public.events to authenticated;
 
 -- ---------------------------------------------------------------------
@@ -726,7 +727,7 @@ alter table public.events add constraint events_group_only_extras
 
 revoke update on public.events from anon, authenticated;
 grant update (title, memo, is_group, is_recurring, start_date, end_date, start_time, end_time,
-              repeat_weekdays, repeat_until, link_url, body_rich, image_paths, max_participants)
+              repeat_weekdays, repeat_until, excluded_dates, link_url, body_rich, image_paths, max_participants)
   on public.events to authenticated;
 
 -- 정원이 찬 일정에는 관리자만 더 넣을 수 있다 (동시에 눌러도 넘치지 않도록 일정 행을 잠근다)
@@ -978,7 +979,7 @@ grant update (name, group_color) on public.calendars to authenticated;
 
 revoke update on public.events from authenticated;
 grant update (title, memo, is_group, is_recurring, start_date, end_date, start_time, end_time,
-              repeat_weekdays, repeat_until, link_url, image_paths, max_participants)
+              repeat_weekdays, repeat_until, excluded_dates, link_url, image_paths, max_participants)
   on public.events to authenticated;
 
 revoke update on public.event_participants from authenticated; -- 참여는 추가·삭제만

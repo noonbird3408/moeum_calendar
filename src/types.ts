@@ -62,6 +62,7 @@ export type EventInput = {
   end_time: string | null;
   repeat_weekdays: number[] | null;
   repeat_until: string | null;
+  excluded_dates?: string[];
   link_url: string | null;
   image_paths?: string[];
   max_participants?: number | null;

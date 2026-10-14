@@ -1727,6 +1727,10 @@
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
+.range-day.exception {
+  outline: 2px solid var(--danger);
+  outline-offset: -2px;
+}
 .range-day.wd-hl:not(.picked)::after {
   content: '';
   position: absolute;
@@ -1738,25 +1742,6 @@
   border-radius: 50%;
   background: var(--accent);
 }
-.dp-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 6px;
-  font-size: 0.85rem;
-}
-.dp-tip {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--fg-faint);
-}
-@media (hover: none) {
-  .dp-tip {
-    display: none;
-  }
-}
-
 /* 전체 일정 사진 고르기 */
 .img-picks {
   display: flex;

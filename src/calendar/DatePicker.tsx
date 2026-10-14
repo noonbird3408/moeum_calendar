@@ -9,6 +9,9 @@ type Props = {
   onChange: (next: Set<string>) => void;
   maxDays?: number; // 한 번에 고를 수 있는 최대 날짜 수
   highlightWeekdays?: number[]; // 요일 반복일 때 해당 요일 표시
+  excludedDates?: string[];
+  onToggleException?: (date: string) => void;
+  isOccurrenceDate?: (date: string) => boolean;
 };
 
 const between = (a: string, b: string) => {
@@ -38,7 +41,15 @@ export function runsText(dates: Set<string>): string {
   return `${shown.join(', ')} (${dates.size}일)`;
 }
 
-export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays }: Props) {
+export function DatePicker({
+  selected,
+  onChange,
+  maxDays = 62,
+  highlightWeekdays,
+  excludedDates = [],
+  onToggleException,
+  isOccurrenceDate,
+}: Props) {
   const { weekStart } = usePrefs();
   const first = [...selected].sort()[0];
   const [month, setMonth] = useState(() => startOfMonth(parseYmd(first ?? todayYmd())));
@@ -46,6 +57,7 @@ export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays
   const today = todayYmd();
   // 끌기 상태: 시작 날짜, 켜기/끄기, 시작 전 선택
   const drag = useRef<{ anchor: string; add: boolean; base: Set<string> } | null>(null);
+  const longPress = useRef<{ date: string; pointerId: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
   const anchor = useRef<string | null>(first ?? null); // 우클릭·Shift 범위의 기준
   const selRef = useRef(selected);
   selRef.current = selected;
@@ -53,6 +65,8 @@ export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays
   useEffect(() => {
     const end = () => {
       drag.current = null;
+      if (longPress.current) clearTimeout(longPress.current.timer);
+      longPress.current = null;
     };
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
@@ -78,6 +92,21 @@ export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays
   const onDown = (e: RPointerEvent<HTMLButtonElement>, d: string) => {
     if (e.button === 2) return; // 우클릭은 contextmenu 에서 처리
     if (e.button !== 0) return;
+    if (highlightWeekdays?.length && e.pointerType === 'touch' && onToggleException && isOccurrenceDate?.(d)) {
+      const pending = {
+        date: d,
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        timer: setTimeout(() => {
+          if (longPress.current !== pending) return;
+          longPress.current = null;
+          onToggleException(d);
+        }, 550),
+      };
+      longPress.current = pending;
+      return;
+    }
     if (e.shiftKey && anchor.current) {
       apply(selRef.current, between(anchor.current, d), true);
       return;
@@ -90,14 +119,36 @@ export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays
   };
 
   const onMove = (e: RPointerEvent<HTMLDivElement>) => {
+    const pending = longPress.current;
+    if (pending && pending.pointerId === e.pointerId && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 10) {
+      clearTimeout(pending.timer);
+      longPress.current = null;
+      const add = !selRef.current.has(pending.date);
+      drag.current = { anchor: pending.date, add, base: new Set(selRef.current) };
+      anchor.current = pending.date;
+    }
     const g = drag.current;
     if (!g) return;
     const d = dayAt(e.clientX, e.clientY);
     if (d) apply(g.base, between(g.anchor, d), g.add);
   };
 
+  const onUp = (e: RPointerEvent<HTMLButtonElement>, d: string) => {
+    const pending = longPress.current;
+    if (!pending || pending.pointerId !== e.pointerId) return;
+    clearTimeout(pending.timer);
+    longPress.current = null;
+    if (drag.current) return;
+    anchor.current = d;
+    apply(selRef.current, [d], !selRef.current.has(d));
+  };
+
   const onContext = (e: RMouseEvent, d: string) => {
     e.preventDefault();
+    if (highlightWeekdays?.length && onToggleException) {
+      if (isOccurrenceDate?.(d)) onToggleException(d);
+      return;
+    }
     const from = drag.current?.anchor ?? anchor.current;
     if (!from) return;
     drag.current = null;
@@ -125,12 +176,14 @@ export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays
         ))}
         {days.map((d) => {
           const on = selected.has(d);
+          const excluded = excludedDates.includes(d);
           const dow = weekday(d);
           const cls = [
             'range-day',
             isSameMonth(d, month) ? '' : 'out',
             d === today ? 'today' : '',
             on ? 'picked' : '',
+            excluded ? 'exception' : '',
             on && selected.has(addDays(d, -1)) ? 'join-l' : '',
             on && selected.has(addDays(d, 1)) ? 'join-r' : '',
             highlightWeekdays?.includes(dow) ? 'wd-hl' : '',
@@ -142,9 +195,10 @@ export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays
               type="button"
               data-day={d}
               className={cls}
-              aria-label={fmtMD(d)}
+              aria-label={`${fmtMD(d)}${excluded ? ' 반복 제외' : ''}`}
               aria-pressed={on}
               onPointerDown={(e) => onDown(e, d)}
+              onPointerUp={(e) => onUp(e, d)}
               onContextMenu={(e) => onContext(e, d)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -161,14 +215,6 @@ export function DatePicker({ selected, onChange, maxDays = 62, highlightWeekdays
             </button>
           );
         })}
-      </div>
-      <div className="dp-foot">
-        <span className="dp-summary">{runsText(selected)}</span>
-        {selected.size > 0 && (
-          <button type="button" className="mini-act" onClick={() => onChange(new Set())}>
-            모두 해제
-          </button>
-        )}
       </div>
     </div>
   );
