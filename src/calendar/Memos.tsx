@@ -1,199 +1,279 @@
-// 달력 아래 메모 두 칸: 왼쪽 공용 메모(모든 멤버가 읽고 고침, 실시간 반영) · 오른쪽 개인 메모(나만 보임)
-// 입력을 멈추고 0.8초 뒤 자동 저장한다.
-import { useEffect, useRef, useState } from 'react';
-import type { Profile } from '@/types';
+// 달력 아래 메모 탭: 캘린더 멤버 모두가 보는 메모 목록 (실시간 반영)
+//  · + 버튼으로 새 메모 작성 — 멤버 누구나
+//  · 메모마다 작성자 · 작성 시간 표시 (고친 메모는 '수정됨')
+//  · 수정은 작성자 본인, 삭제는 작성자 본인 또는 관리자
+import { useEffect, useState } from 'react';
+import type { Memo, Profile } from '@/types';
+import { GRAY } from '@/lib/colors';
 import { errorMessage, supabase } from '@/lib/supabase';
+import { Avatar } from '@/ui/Avatar';
+import { Icon } from '@/ui/Icon';
 import { useFeedback } from '@/ui/Feedback';
 
 const MAX = 5000;
-const DELAY = 800;
+const PAGE = 5;
+const COLS = 'id, calendar_id, author_id, body, created_at, updated_at';
 const uniq = () => Math.random().toString(36).slice(2, 8);
-const hm = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const pad = (n: number) => String(n).padStart(2, '0');
 
-type Status = { state: 'idle' | 'saving' | 'saved' | 'error'; at?: string; by?: string | null };
-
-function MemoBox({
-  title,
-  hint,
-  text,
-  status,
-  remoteChanged,
-  onChange,
-  onReload,
-}: {
-  title: string;
-  hint: string;
-  text: string | null;
-  status: Status;
-  remoteChanged?: boolean;
-  onChange: (v: string) => void;
-  onReload?: () => void;
-}) {
-  return (
-    <section className="panel memo" aria-label={title}>
-      <header className="panel-head">
-        <h2>{title}</h2>
-        <span className="memo-status">
-          {status.state === 'saving' ? '저장 중…' : status.state === 'error' ? '저장 실패' : status.at ? `${hm(status.at)}${status.by ? ` · ${status.by}` : ''}` : hint}
-        </span>
-      </header>
-      {remoteChanged && (
-        <button type="button" className="memo-remote" onClick={onReload}>
-          다른 멤버가 메모를 고쳤어요 · 불러오기
-        </button>
-      )}
-      <textarea
-        className="input memo-text"
-        value={text ?? ''}
-        disabled={text === null}
-        maxLength={MAX}
-        placeholder={text === null ? '불러오는 중…' : '메모를 적어 보세요'}
-        aria-label={title}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </section>
-  );
+/** '10/15 21:30' — 올해가 아니면 '25년 10/15 21:30' */
+function when(iso: string) {
+  const d = new Date(iso);
+  const s = `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return d.getFullYear() === new Date().getFullYear() ? s : `${String(d.getFullYear()).slice(2)}년 ${s}`;
 }
 
-/** 저장 예약: 마지막 입력 뒤 DELAY 만큼 기다렸다가 save 를 부른다 */
-function useAutosave(save: (v: string) => Promise<void>) {
-  const timer = useRef<number | null>(null);
-  const latest = useRef<string | null>(null);
-  const saveRef = useRef(save);
-  saveRef.current = save;
+function useMemoList(calendarId: string) {
+  const [rows, setRows] = useState<Memo[] | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  const flush = () => {
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = null;
-    if (latest.current !== null) {
-      const v = latest.current;
-      latest.current = null;
-      void saveRef.current(v);
+  const load = async () => {
+    const { data, error } = await supabase
+      .from('memos')
+      .select(COLS)
+      .eq('calendar_id', calendarId)
+      .order('created_at', { ascending: false })
+      .limit(300);
+    if (error) {
+      setFailed(true);
+      setRows((r) => r ?? []);
+      return;
     }
+    setFailed(false);
+    setRows((data ?? []) as Memo[]);
   };
-  useEffect(() => () => flush(), []); // 화면을 떠날 때 남은 내용 저장
-  return {
-    schedule(v: string) {
-      latest.current = v;
-      if (timer.current) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(flush, DELAY);
-    },
-    pending: () => latest.current !== null,
-  };
-}
 
-export function Memos({ calendarId, myId, profiles }: { calendarId: string; myId: string; profiles: Map<string, Profile> }) {
-  const { toast } = useFeedback();
-  const [shared, setShared] = useState<string | null>(null);
-  const [sharedStatus, setSharedStatus] = useState<Status>({ state: 'idle' });
-  const [remote, setRemote] = useState<{ body: string; at: string; by: string | null } | null>(null);
-  const [mine, setMine] = useState<string | null>(null);
-  const [mineStatus, setMineStatus] = useState<Status>({ state: 'idle' });
-  const editingShared = useRef(false);
-
-  const nameOf = (id: string | null) => (id ? (profiles.get(id)?.nickname ?? null) : null);
-
-  // 처음 불러오기 + 공용 메모 실시간 반영
   useEffect(() => {
     let alive = true;
-    setShared(null);
-    setMine(null);
-    (async () => {
-      const [s, m] = await Promise.all([
-        supabase.from('calendar_notes').select('body, updated_by, updated_at').eq('calendar_id', calendarId).maybeSingle(),
-        supabase.from('personal_notes').select('body, updated_at').eq('calendar_id', calendarId).eq('user_id', myId).maybeSingle(),
-      ]);
-      if (!alive) return;
-      const sd = s.data as { body: string; updated_by: string | null; updated_at: string } | null;
-      setShared(sd?.body ?? '');
-      setSharedStatus(sd ? { state: 'saved', at: sd.updated_at, by: sd.updated_by } : { state: 'idle' });
-      const md = m.data as { body: string; updated_at: string } | null;
-      setMine(md?.body ?? '');
-      setMineStatus(md ? { state: 'saved', at: md.updated_at } : { state: 'idle' });
-    })();
-
+    setRows(null);
+    const reload = () => {
+      if (alive) void load();
+    };
+    reload();
     const ch = supabase
-      .channel(`notes:${calendarId}:${uniq()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_notes', filter: `calendar_id=eq.${calendarId}` }, (p) => {
-        const row = p.new as { body?: string; updated_by?: string | null; updated_at?: string } | null;
-        if (!row || row.body === undefined || row.updated_by === myId) return;
-        const next = { body: row.body, at: row.updated_at ?? new Date().toISOString(), by: row.updated_by ?? null };
-        // 내가 고치는 중이 아니면 바로 바꾸고, 고치는 중이면 '불러오기' 버튼을 띄운다
-        if (editingShared.current) setRemote(next);
-        else {
-          setShared(next.body);
-          setSharedStatus({ state: 'saved', at: next.at, by: next.by });
-        }
-      })
+      .channel(`memos:${calendarId}:${uniq()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'memos', filter: `calendar_id=eq.${calendarId}` }, reload)
+      // 삭제 알림은 PK 만 오므로 한 번 더 불러온다
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'memos' }, reload)
       .subscribe();
     return () => {
       alive = false;
       supabase.removeChannel(ch);
     };
-  }, [calendarId, myId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendarId]);
 
-  const sharedSave = useAutosave(async (body) => {
-    setSharedStatus({ state: 'saving' });
-    const { data, error } = await supabase
-      .from('calendar_notes')
-      .upsert({ calendar_id: calendarId, body, updated_by: myId }, { onConflict: 'calendar_id' })
-      .select('updated_at')
-      .single();
-    editingShared.current = false;
-    if (error) {
-      setSharedStatus({ state: 'error' });
-      toast(errorMessage(error), 'error');
-      return;
-    }
-    setSharedStatus({ state: 'saved', at: (data as { updated_at: string }).updated_at, by: myId });
-  });
+  return { rows, setRows, failed, reload: load };
+}
 
-  const mineSave = useAutosave(async (body) => {
-    setMineStatus({ state: 'saving' });
+function MemoEditor({
+  initial = '',
+  submitText,
+  onSubmit,
+  onCancel,
+}: {
+  initial?: string;
+  submitText: string;
+  onSubmit: (body: string) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const body = text.trim();
+  const send = async () => {
+    if (!body || busy) return;
+    setBusy(true);
+    const ok = await onSubmit(body);
+    setBusy(false);
+    if (ok) setText('');
+  };
+  return (
+    <div className="memo-editor">
+      <textarea
+        className="input memo-text"
+        value={text}
+        maxLength={MAX}
+        autoFocus
+        placeholder="모두가 볼 수 있는 메모를 적어 보세요"
+        aria-label="메모 내용"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            void send();
+          }
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            onCancel();
+          }
+        }}
+      />
+      <div className="memo-editor-foot">
+        <span className="memo-count">
+          {text.length}/{MAX}
+        </span>
+        <button type="button" className="btn btn-ghost btn-small" onClick={onCancel} disabled={busy}>
+          취소
+        </button>
+        <button type="button" className="btn btn-primary btn-small" onClick={send} disabled={!body || busy}>
+          {busy ? '저장 중…' : submitText}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function Memos({
+  calendarId,
+  myId,
+  isAdmin,
+  profiles,
+}: {
+  calendarId: string;
+  myId: string;
+  isAdmin: boolean;
+  profiles: Map<string, Profile>;
+}) {
+  const { toast, confirm } = useFeedback();
+  const { rows, setRows, failed, reload } = useMemoList(calendarId);
+  const [composing, setComposing] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    setComposing(false);
+    setEditing(null);
+    setShowAll(false);
+  }, [calendarId]);
+
+  const add = async (body: string) => {
     const { data, error } = await supabase
-      .from('personal_notes')
-      .upsert({ calendar_id: calendarId, user_id: myId, body }, { onConflict: 'calendar_id,user_id' })
-      .select('updated_at')
+      .from('memos')
+      .insert({ calendar_id: calendarId, author_id: myId, body })
+      .select(COLS)
       .single();
     if (error) {
-      setMineStatus({ state: 'error' });
       toast(errorMessage(error), 'error');
-      return;
+      return false;
     }
-    setMineStatus({ state: 'saved', at: (data as { updated_at: string }).updated_at });
-  });
+    const row = data as Memo;
+    setRows((r) => [row, ...(r ?? []).filter((m) => m.id !== row.id)]);
+    setComposing(false);
+    return true;
+  };
+
+  const save = async (id: string, body: string) => {
+    const { data, error } = await supabase.from('memos').update({ body }).eq('id', id).select(COLS).single();
+    if (error) {
+      toast(errorMessage(error), 'error');
+      return false;
+    }
+    const row = data as Memo;
+    setRows((r) => (r ?? []).map((m) => (m.id === id ? row : m)));
+    setEditing(null);
+    return true;
+  };
+
+  const remove = async (m: Memo) => {
+    const ok = await confirm({ title: '메모를 삭제할까요?', confirmText: '삭제', danger: true });
+    if (!ok) return;
+    const { error } = await supabase.from('memos').delete().eq('id', m.id);
+    if (error) return toast(errorMessage(error), 'error');
+    setRows((r) => (r ?? []).filter((x) => x.id !== m.id));
+  };
+
+  const list = rows ?? [];
+  const visible = showAll ? list : list.slice(0, PAGE);
 
   return (
-    <div className="memos">
-      <MemoBox
-        title="공용 메모"
-        hint="모든 멤버가 함께 고쳐요"
-        text={shared}
-        status={{ ...sharedStatus, by: nameOf(sharedStatus.by ?? null) }}
-        remoteChanged={!!remote}
-        onReload={() => {
-          if (!remote) return;
-          setShared(remote.body);
-          setSharedStatus({ state: 'saved', at: remote.at, by: remote.by });
-          setRemote(null);
-          editingShared.current = false;
-        }}
-        onChange={(v) => {
-          editingShared.current = true;
-          setShared(v);
-          sharedSave.schedule(v);
-        }}
-      />
-      <MemoBox
-        title="개인 메모"
-        hint="나만 볼 수 있어요"
-        text={mine}
-        status={mineStatus}
-        onChange={(v) => {
-          setMine(v);
-          mineSave.schedule(v);
-        }}
-      />
-    </div>
+    <section className="panel memo-panel" aria-label="메모">
+      <header className="panel-head memo-head">
+        <h2>
+          메모{list.length > 0 && <span className="memo-total">{list.length}</span>}
+        </h2>
+        <button
+          type="button"
+          className="icon-btn memo-add"
+          aria-label="새 메모"
+          title="새 메모"
+          aria-pressed={composing}
+          onClick={() => {
+            setEditing(null);
+            setComposing((v) => !v);
+          }}
+        >
+          <Icon name={composing ? 'close' : 'plus'} size={20} />
+        </button>
+      </header>
+
+      {composing && <MemoEditor submitText="등록" onSubmit={add} onCancel={() => setComposing(false)} />}
+
+      {rows === null ? (
+        <p className="muted small">불러오는 중…</p>
+      ) : failed ? (
+        <p className="empty small">
+          메모를 불러오지 못했어요.{' '}
+          <button type="button" className="link-btn" onClick={() => void reload()}>
+            다시 시도
+          </button>
+        </p>
+      ) : list.length === 0 ? (
+        !composing && <p className="empty small">아직 메모가 없어요. + 를 눌러 첫 메모를 남겨 보세요.</p>
+      ) : (
+        <ul className="memo-list">
+          {visible.map((m) => {
+            const author = profiles.get(m.author_id) ?? null;
+            const mine = m.author_id === myId;
+            return (
+              <li key={m.id} className="memo-item">
+                <Avatar profile={author} size={30} />
+                <div className="memo-main">
+                  <div className="memo-meta">
+                    <b className="memo-name" style={{ color: author?.color ?? GRAY }}>
+                      {author?.nickname ?? '(알 수 없음)'}
+                    </b>
+                    {mine && <span className="cm-me">나</span>}
+                    <time className="memo-time" dateTime={m.created_at} title={new Date(m.created_at).toLocaleString('ko-KR')}>
+                      {when(m.created_at)}
+                      {m.updated_at && ' · 수정됨'}
+                    </time>
+                  </div>
+                  {editing === m.id ? (
+                    <MemoEditor initial={m.body} submitText="저장" onSubmit={(b) => save(m.id, b)} onCancel={() => setEditing(null)} />
+                  ) : (
+                    <p className="memo-body">{m.body}</p>
+                  )}
+                  {editing !== m.id && (mine || isAdmin) && (
+                    <div className="cm-actions">
+                      {mine && (
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() => {
+                            setComposing(false);
+                            setEditing(m.id);
+                          }}
+                        >
+                          수정
+                        </button>
+                      )}
+                      <button type="button" className="link-btn danger-text" onClick={() => remove(m)}>
+                        삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {list.length > PAGE && (
+        <button type="button" className="link-btn memo-more" onClick={() => setShowAll((v) => !v)}>
+          {showAll ? '접기' : `메모 ${list.length - PAGE}개 더 보기`}
+        </button>
+      )}
+    </section>
   );
 }

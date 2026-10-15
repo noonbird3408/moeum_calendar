@@ -1624,46 +1624,100 @@
   white-space: nowrap;
 }
 
-/* 달력 아래 메모 두 칸 */
-.memos {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+/* 달력 아래 메모 탭 */
+.memo-panel {
   margin-top: 14px;
 }
-@media (max-width: 640px) {
-  .memos {
-    grid-template-columns: 1fr;
-  }
+.memo-head {
+  align-items: center;
+  margin-bottom: 0.25rem;
 }
-.memo {
-  margin: 0;
+.memo-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.memo-total {
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-width: 1.4rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  text-align: center;
+}
+.memo-add {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: -0.25rem -0.25rem -0.25rem 0;
+  color: var(--accent);
+}
+.memo-add[aria-pressed='true'] {
+  color: var(--fg-muted);
+}
+.memo-editor {
   display: flex;
   flex-direction: column;
-}
-.memo-status {
-  font-size: 0.75rem;
-  color: var(--fg-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 60%;
+  gap: 6px;
+  margin: 6px 0 4px;
 }
 .memo-text {
-  min-height: 140px;
+  min-height: 96px;
   resize: vertical;
   line-height: 1.55;
 }
-.memo-remote {
-  margin-bottom: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
+.memo-editor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.memo-count {
+  margin-right: auto;
+  font-size: 0.72rem;
+  color: var(--fg-faint);
+}
+.memo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.memo-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.memo-item:last-child {
+  border-bottom: 0;
+}
+.memo-main {
+  flex: 1;
+  min-width: 0;
+}
+.memo-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.memo-name {
+  font-size: 0.92rem;
+}
+.memo-time {
+  font-size: 0.75rem;
+  color: var(--fg-faint);
+}
+.memo-body {
+  margin: 3px 0 2px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+.memo-more {
+  margin-top: 6px;
+  font-size: 0.82rem;
 }
 
 /* 일정 추가: 날짜 버튼 → 요일 + 달력 */

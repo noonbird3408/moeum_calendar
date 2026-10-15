@@ -364,8 +364,8 @@ export function CalendarPage({ calendarId }: { calendarId: string }) {
             <HighlightToggles showFull={prefs.showFull} showPartial={prefs.showPartial} onChange={(v) => setPrefs(v)} />
           </div>
 
-          {/* 달력 아래: 공용 메모 · 개인 메모 */}
-          <Memos calendarId={calendarId} myId={userId} profiles={meta.profiles} />
+          {/* 달력 아래: 메모 탭 (멤버 모두가 보는 메모 목록, + 로 새 메모) */}
+          <Memos calendarId={calendarId} myId={userId} isAdmin={meta.isAdmin} profiles={meta.profiles} />
 
           {isMobile && upcoming}
 

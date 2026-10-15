@@ -97,3 +97,13 @@ export type Announcement = {
   updated_at: string;
   author?: Profile | null;
 };
+
+/** 캘린더 메모 (멤버 모두가 봄) */
+export type Memo = {
+  id: string;
+  calendar_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string | null; // 수정하면 채워진다
+};
