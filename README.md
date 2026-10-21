@@ -41,7 +41,7 @@
 2. **DB 설치**: 왼쪽 메뉴 **SQL Editor → New query** 에 `supabase/setup.sql` 내용을 전부 붙여넣고 **Run**.
    - 같은 내용이 `supabase/migrations/` 에 12개 파일로도 나뉘어 있습니다 (Supabase CLI 사용 시 순서대로 실행).
    - `setup.sql` 은 여러 번 실행해도 안전합니다. `relation already exists` 같은 오류가 나지 않도록 모든 구문이 멱등하게 작성되어 있습니다.
-   - **이미 설치한 프로젝트를 올릴 때**는 `setup.sql` 전체를 다시 실행하면 됩니다(멱등). 새 파일만 실행하려면 v0.4 `…07_notices_admin_participants.sql`, v0.5 `…08_notice_rich.sql`, v0.6 `…09_v06.sql`, v0.7 `…10_notice_event_tag.sql`, v0.8 `…11_security_hardening.sql`, `…12_occurrence_exceptions.sql`, 메모 탭 `20261015000001_memos.sql` 을 순서대로 실행하세요.
+   - **이미 설치한 프로젝트를 올릴 때**는 `setup.sql` 전체를 다시 실행하면 됩니다(멱등). 새 파일만 실행하려면 v0.4 `…07_notices_admin_participants.sql`, v0.5 `…08_notice_rich.sql`, v0.6 `…09_v06.sql`, v0.7 `…10_notice_event_tag.sql`, v0.8 `…11_security_hardening.sql`, `…12_occurrence_exceptions.sql`, 메모 탭 `20261015000001_memos.sql`, 일정 추가 권한 오류 수정 `20261021000001_fix_event_dates_grant.sql` 을 순서대로 실행하세요.
      - v0.8: 권한 정리(anon 차단·TRUNCATE 회수·내부 함수 실행 금지), 값 검사, 사용량·도배 제한, 접속 표시 비공개 채널 정책
      - v0.7: 공지사항에 전체 일정 태그(`announcements.event_id`, 같은 캘린더의 전체 일정만), 공지의 캘린더·작성자 변경 차단
      - v0.6: 캘린더 설명·헤더 모양, 댓글 수정·답글, 전체 일정 사진(비공개 `event-images` 버킷)·참여 정원, 공용·개인 메모, 초대코드 대입 방지, 프로필 사진 저장소 제한
@@ -128,7 +128,7 @@ npm run dev
 ```text
 supabase/
   setup.sql                 한 번에 설치하는 SQL (migrations 001~012 합본)
-  migrations/               001 스키마 · 002 RLS · 003 RPC · 004 Realtime · 005 정기 일정 · 006 v0.3(사진·참여·댓글·요일 반복·계정 삭제) · 007 v0.4(공지사항·참여자 관리 정책) · 008 v0.5(공지 서식 본문) · 009 v0.6(캘린더 탭·댓글·사진·정원·메모·보안) · 010 v0.7(공지 일정 태그) · 011 v0.8(보안 보강) · 012 반복 회차 예외 · 20261015000001 메모 탭(멤버 공용 메모 목록)
+  migrations/               001 스키마 · 002 RLS · 003 RPC · 004 Realtime · 005 정기 일정 · 006 v0.3(사진·참여·댓글·요일 반복·계정 삭제) · 007 v0.4(공지사항·참여자 관리 정책) · 008 v0.5(공지 서식 본문) · 009 v0.6(캘린더 탭·댓글·사진·정원·메모·보안) · 010 v0.7(공지 일정 태그) · 011 v0.8(보안 보강) · 012 반복 회차 예외 · 20261015000001 메모 탭(멤버 공용 메모 목록) · 20261021000001 일정 추가 권한 오류 수정
   tests/permissions.test.sql  권한·RLS·계정 삭제 검증 (로컬 Postgres 에서 실행, 마지막 줄 ALL TESTS PASSED)
 src/
   App.tsx                   라우트 + 로그인/프로필 관문
