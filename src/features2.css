@@ -2272,39 +2272,3 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* 강조색 글자: 고른 색이 밝아도 읽히도록 글자색을 대비 기준으로 */
-.tag-full {
-  color: var(--hl-full-fg, #fff);
-}
-.tag-partial,
-.chip-tab-partial.on {
-  color: color-mix(in srgb, var(--hl-partial) 70%, var(--fg));
-}
-.chip-tab-full.on {
-  color: color-mix(in srgb, var(--hl-full) 70%, var(--fg));
-}
-
-/* 강조된 날이 '오늘' 이면 배경이 덮여 오늘 표시가 사라지지 않도록 테두리로 한 번 더 */
-.cell.today.hl-full,
-.cell.today.hl-partial,
-.m-cell.today.hl-full,
-.m-cell.today.hl-partial {
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-.cell.today.has-group.hl-full,
-.cell.today.has-group.hl-partial,
-.m-cell.today.has-group.hl-full,
-.m-cell.today.has-group.hl-partial {
-  box-shadow: inset 0 3px 0 var(--grp), inset 0 0 0 2px var(--accent);
-}
-
-/* 단체 일정이 있는 날도 일·토 날짜 색은 유지 (배경 틴트만) */
-.cell.has-group:not(.today) .daynum.sun,
-.m-cell.has-group:not(.today) .daynum.sun {
-  color: var(--sun);
-}
-.cell.has-group:not(.today) .daynum.sat,
-.m-cell.has-group:not(.today) .daynum.sat {
-  color: var(--sat);
-}

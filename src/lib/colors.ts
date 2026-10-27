@@ -20,14 +20,9 @@ const luminance = (hex: string) => {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 };
 
-const DARK_TEXT = '#111827';
-
-/** 배경색 위에서 읽기 좋은 글자색: 흰 글씨와 진한 글씨 중 대비가 더 큰 쪽 */
+/** 배경색 위에서 읽기 좋은 글자색 */
 export function textOn(hex: string) {
-  const L = luminance(hex);
-  const onWhite = 1.05 / (L + 0.05);
-  const onDark = (L + 0.05) / (luminance(DARK_TEXT) + 0.05);
-  return onWhite >= onDark ? '#ffffff' : DARK_TEXT;
+  return luminance(hex) > 0.45 ? '#111827' : '#ffffff';
 }
 
 /** '#RRGGBB' + 투명도(0~1) */
