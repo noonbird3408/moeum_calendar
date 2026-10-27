@@ -1,5 +1,6 @@
 // 기기별 화면 설정 (localStorage). 계정 간 공유가 필요 없는 값만 둔다.
 import { useSyncExternalStore } from 'react';
+import { textOn } from './colors';
 
 export type Prefs = {
   theme: 'system' | 'light' | 'dark';
@@ -30,8 +31,11 @@ export const DEFAULT_PREFS: Prefs = {
   showPartial: true,
   weekStart: 0,
   fullColor: '#16a34a',
-  partialColor: '#2f6fed',
+  // 예전 기본값(#2f6fed)은 '오늘'·토요일·강조 버튼과 같은 파랑이라 구분이 안 돼 보라로 바꿈
+  partialColor: '#8b5cf6',
 };
+
+const OLD_PARTIAL_DEFAULT = '#2f6fed';
 
 const FONT_SIZE = { sm: '14px', md: '16px', lg: '18px' } as const;
 const FONT = {
@@ -42,7 +46,10 @@ const FONT = {
 
 function load(): Prefs {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem('prefs') || '{}') };
+    const saved = JSON.parse(localStorage.getItem('prefs') || '{}');
+    // 직접 고른 적 없이 예전 기본 파랑이 저장돼 있던 경우만 새 기본값으로 옮긴다
+    if (typeof saved.partialColor === 'string' && saved.partialColor.toLowerCase() === OLD_PARTIAL_DEFAULT) delete saved.partialColor;
+    return { ...DEFAULT_PREFS, ...saved };
   } catch {
     return DEFAULT_PREFS;
   }
@@ -60,6 +67,9 @@ export function applyPrefs(p: Prefs = prefs) {
   root.style.setProperty('--font-sans', FONT[p.font]);
   root.style.setProperty('--hl-full', p.fullColor);
   root.style.setProperty('--hl-partial', p.partialColor);
+  // 강조색 위 글자색(대비가 큰 쪽)
+  root.style.setProperty('--hl-full-fg', textOn(p.fullColor));
+  root.style.setProperty('--hl-partial-fg', textOn(p.partialColor));
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#16181d' : '#ffffff');
 }
 

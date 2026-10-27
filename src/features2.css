@@ -2229,3 +2229,82 @@
   min-width: 3.4rem;
   text-align: center;
 }
+
+/* ================= v0.8 ================= */
+/* 가능한 날 탭: 좁은 화면에서 '특정 시간대' 가 칸 밖으로 나가지 않게
+   — 글자는 줄바꿈 대신 칩 자체가 다음 줄로 내려가고, 그래도 좁으면 칩 안에서 줄바꿈 */
+.avail-panel {
+  min-width: 0;
+}
+.avail-panel .chip-tabs {
+  flex-wrap: wrap;
+}
+.avail-panel .chip-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+.avail-panel .chip-count {
+  flex-shrink: 0;
+  margin-left: 0;
+}
+.avail-row {
+  min-width: 0;
+}
+.avail-date {
+  min-width: 0;
+}
+.avail-slots {
+  min-width: 0;
+  max-width: 100%;
+}
+.avail-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 강조색 글자: 고른 색이 밝아도 읽히도록 글자색을 대비 기준으로 */
+.tag-full {
+  color: var(--hl-full-fg, #fff);
+}
+.tag-partial,
+.chip-tab-partial.on {
+  color: color-mix(in srgb, var(--hl-partial) 70%, var(--fg));
+}
+.chip-tab-full.on {
+  color: color-mix(in srgb, var(--hl-full) 70%, var(--fg));
+}
+
+/* 강조된 날이 '오늘' 이면 배경이 덮여 오늘 표시가 사라지지 않도록 테두리로 한 번 더 */
+.cell.today.hl-full,
+.cell.today.hl-partial,
+.m-cell.today.hl-full,
+.m-cell.today.hl-partial {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.cell.today.has-group.hl-full,
+.cell.today.has-group.hl-partial,
+.m-cell.today.has-group.hl-full,
+.m-cell.today.has-group.hl-partial {
+  box-shadow: inset 0 3px 0 var(--grp), inset 0 0 0 2px var(--accent);
+}
+
+/* 단체 일정이 있는 날도 일·토 날짜 색은 유지 (배경 틴트만) */
+.cell.has-group:not(.today) .daynum.sun,
+.m-cell.has-group:not(.today) .daynum.sun {
+  color: var(--sun);
+}
+.cell.has-group:not(.today) .daynum.sat,
+.m-cell.has-group:not(.today) .daynum.sat {
+  color: var(--sat);
+}

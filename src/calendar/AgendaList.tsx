@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CalendarEvent, Profile } from '@/types';
 import { fmtMDW, todayYmd } from '@/lib/dates';
-import { GRAY } from '@/lib/colors';
+import { GRAY, textOn } from '@/lib/colors';
 import { Icon } from '@/ui/Icon';
 import { Dot } from '@/ui/controls';
 import { nicknameOf, timeRange } from './eventUtils';
@@ -56,7 +56,7 @@ export function AgendaList({ monthDays, byDay, profiles, groupColor, grayPersona
               <span className="ag-count">
                 {list.length ? (
                   <>
-                    {g > 0 && <span className="badge badge-group" style={{ background: groupColor }}>단체 {g}</span>}
+                    {g > 0 && <span className="badge badge-group" style={{ background: groupColor, color: textOn(groupColor) }}>단체 {g}</span>}
                     {list.length - g > 0 && <span>개인 {list.length - g}</span>}
                   </>
                 ) : (
