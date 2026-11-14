@@ -1,16 +1,17 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider, peekNext, saveNext, takeNext, useAuth } from '@/auth/AuthProvider';
 import { LoginPage } from '@/auth/LoginPage';
 import { OnboardingPage } from '@/auth/OnboardingPage';
-import { CalendarPage } from '@/calendar/CalendarPage';
-import { HomePage } from '@/calendars/HomePage';
 import { JoinPage } from '@/calendars/JoinPage';
-import { MembersPage } from '@/members/MembersPage';
-import { SettingsPage } from '@/settings/SettingsPage';
 import { supabaseConfigured } from '@/lib/supabase';
 import { Navigate, RouterProvider, matchPath, useRouter } from '@/lib/router';
 import { FeedbackProvider } from '@/ui/Feedback';
 import { Splash } from '@/ui/controls';
+
+const CalendarPage = lazy(() => import('@/calendar/CalendarPage').then((module) => ({ default: module.CalendarPage })));
+const HomePage = lazy(() => import('@/calendars/HomePage').then((module) => ({ default: module.HomePage })));
+const MembersPage = lazy(() => import('@/members/MembersPage').then((module) => ({ default: module.MembersPage })));
+const SettingsPage = lazy(() => import('@/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 
 /** 로그인·온보딩을 마친 뒤 원래 가려던 경로로 (렌더 중이 아니라 이펙트에서 소비해 StrictMode 이중 렌더에도 안전) */
 function GoNext() {
@@ -85,7 +86,9 @@ export default function App() {
     <RouterProvider>
       <FeedbackProvider>
         <AuthProvider>
-          <Routes />
+          <Suspense fallback={<Splash />}>
+            <Routes />
+          </Suspense>
         </AuthProvider>
       </FeedbackProvider>
     </RouterProvider>
